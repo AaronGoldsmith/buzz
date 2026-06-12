@@ -33,6 +33,7 @@ export default defineConfig({
         "**/channel-controls.spec.ts",
         "**/active-turn-resilience.spec.ts",
         "**/profile-active-turn.spec.ts",
+        "**/config-bridge-screenshots.spec.ts",
         "**/file-attachment.spec.ts",
         "**/video-attachment.spec.ts",
         "**/spoiler.spec.ts",
