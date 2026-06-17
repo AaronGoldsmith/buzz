@@ -1126,6 +1126,7 @@ async fn tokio_main() -> Result<()> {
                             state: SessionState::default(),
                             model_capabilities: None,
                             desired_model: config.model.clone(),
+                            model_overridden: false,
                             protocol_version,
                         }));
                     }
@@ -1546,6 +1547,7 @@ async fn tokio_main() -> Result<()> {
                         state: SessionState::default(),
                         model_capabilities: None,
                         desired_model: config.model.clone(),
+                        model_overridden: false,
                         protocol_version,
                     };
                     pool.return_agent(agent);
@@ -3512,6 +3514,7 @@ mod error_outcome_emission_tests {
             state: Default::default(),
             model_capabilities: None,
             desired_model: None,
+            model_overridden: false,
             // Error branches under test never read this; 1 is the legacy
             // non-systemPrompt path, the simplest valid value.
             protocol_version: 1,
