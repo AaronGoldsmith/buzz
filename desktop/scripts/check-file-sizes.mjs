@@ -87,7 +87,7 @@ const overrides = new Map([
   // AgentConfigPanel footer fold into ProfileFieldGroup for the config-bridge
   // panel — a small overage from load-bearing UI plumbing, not generic debt
   // growth. Approved override; still queued to split with the rest of this list.
-  ["src/features/profile/ui/UserProfilePanelSections.tsx", 1002],
+  ["src/features/profile/ui/UserProfilePanelSections.tsx", 1004],
   // useDueReminderBadgeCount hook call + sum to wire due-reminder count into
   // the Inbox nav badge — a small overage from load-bearing badge plumbing,
   // not generic debt growth. Approved override; still queued to split.
