@@ -11,6 +11,7 @@ import type { AgentPersona, UpdatePersonaInput } from "@/shared/api/types";
 import { buildPersonaImportPlan } from "./personaImportPlan";
 import {
   editPersonaDialogState,
+  importedAvatarUrl,
   type PersonaDialogState,
 } from "./personaDialogState";
 
@@ -108,6 +109,7 @@ export function usePersonaImportActions(
     const selectedFieldSet = new Set(selectedFields);
     const preview = personaImportTargetPreview.preview;
     const existing = personaImportTarget;
+    const avatarUrl = importedAvatarUrl(preview);
 
     try {
       const updateInput: UpdatePersonaInput = {
@@ -119,7 +121,7 @@ export function usePersonaImportActions(
           ? preview.systemPrompt
           : existing.systemPrompt,
         avatarUrl: selectedFieldSet.has("avatarUrl")
-          ? (preview.avatarDataUrl ?? preview.avatarRef ?? undefined)
+          ? avatarUrl || undefined
           : (existing.avatarUrl ?? undefined),
         runtime: selectedFieldSet.has("runtime")
           ? (preview.runtime ?? undefined)
