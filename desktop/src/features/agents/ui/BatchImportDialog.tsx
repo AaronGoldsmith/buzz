@@ -93,7 +93,7 @@ export function BatchImportDialog({
       try {
         await createPersona({
           displayName: persona.displayName,
-          avatarUrl: persona.avatarDataUrl ?? undefined,
+          avatarUrl: persona.avatarDataUrl ?? persona.avatarRef ?? undefined,
           systemPrompt: persona.systemPrompt,
           runtime: persona.runtime ?? undefined,
           model: persona.model ?? undefined,
@@ -178,7 +178,7 @@ export function BatchImportDialog({
                         onClick={(e: React.MouseEvent) => e.stopPropagation()}
                       />
                       <ProfileAvatar
-                        avatarUrl={persona.avatarDataUrl}
+                        avatarUrl={persona.avatarDataUrl ?? persona.avatarRef}
                         className="h-8 w-8 rounded-lg text-xs"
                         label={persona.displayName}
                       />

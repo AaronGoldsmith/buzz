@@ -5034,6 +5034,7 @@ async function handleParsePersonaFiles(args: {
     display_name: string;
     system_prompt: string;
     avatar_data_url: string | null;
+    avatar_ref: string | null;
     source_file: string;
   }[];
   skipped: { source_file: string; reason: string }[];
@@ -5045,6 +5046,7 @@ async function handleParsePersonaFiles(args: {
         display_name: "Imported Persona",
         system_prompt: "You are an imported test persona.",
         avatar_data_url: null,
+        avatar_ref: null,
         source_file: args.fileName,
       },
     ],
