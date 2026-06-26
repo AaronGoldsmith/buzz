@@ -34,7 +34,7 @@ async function openPersonaCatalog(page: import("@playwright/test").Page) {
     .getByTestId("agents-library-personas")
     .getByRole("button", { name: "New", exact: true })
     .click();
-  await page.getByText("Choose from Catalog...").click();
+  await page.getByText("Choose from catalog").click();
 }
 
 async function getCatalogOrder(page: import("@playwright/test").Page) {

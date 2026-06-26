@@ -119,7 +119,7 @@ test("create agent supports parallelism and system prompt overrides", async ({
     .getByTestId("agents-library-personas")
     .getByRole("button", { name: "New", exact: true })
     .click();
-  await page.getByText("Custom Agent").click();
+  await page.getByText("Custom agent").click();
 
   await page.getByTestId("agent-name-input").fill(agentName);
   await page.getByRole("button", { name: "Advanced setup" }).click();

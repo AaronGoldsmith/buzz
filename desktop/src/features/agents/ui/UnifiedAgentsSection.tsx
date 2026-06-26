@@ -31,6 +31,7 @@ import { AgentGroupRows } from "./AgentGroupRows";
 import { PersonaActionsMenu } from "./PersonaActionsMenu";
 import { PersonaIdentity } from "./PersonaIdentity";
 import { PersonaLibraryEntryPoints } from "./PersonaLibraryEntryPoints";
+import { personaLibraryCopy } from "./personaLibraryCopy";
 
 type UnifiedAgentsSectionProps = {
   actionErrorMessage: string | null;
@@ -311,7 +312,7 @@ export function UnifiedAgentsSection(props: UnifiedAgentsSectionProps) {
               agents={ungrouped}
               collapsed={collapsed}
               groupKey="__ungrouped__"
-              label="Custom Agents"
+              label="Custom agents"
               rowProps={rowProps}
               onToggle={toggle}
             />
@@ -447,22 +448,22 @@ function SectionHeader({
               disabled={isPersonasPending}
               onClick={onCreatePersona}
             >
-              Persona
+              {personaLibraryCopy.createNew}
             </DropdownMenuItem>
             {canChooseCatalog ? (
               <DropdownMenuItem
                 disabled={isPersonasPending}
                 onClick={onChooseCatalog}
               >
-                Choose from Catalog...
+                {personaLibraryCopy.chooseFromCatalog}
               </DropdownMenuItem>
             ) : null}
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={onCreateAgent}>
-              Custom Agent
+              {personaLibraryCopy.customAgent}
             </DropdownMenuItem>
             <DropdownMenuItem onClick={openFilePicker}>
-              Import persona file
+              {personaLibraryCopy.import}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -559,8 +560,7 @@ function EmptyState({
     <div className="rounded-xl border border-dashed border-primary/40 px-6 py-10 text-center">
       <p className="text-sm font-semibold tracking-tight">No agents yet</p>
       <p className="mt-2 text-sm text-muted-foreground">
-        Create a persona or choose one from the catalog, then deploy it to a
-        channel.
+        {personaLibraryCopy.emptyDescription}
       </p>
       <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
         <PersonaLibraryEntryPoints
