@@ -176,6 +176,95 @@ export function evictDominatedEntries(
 }
 
 /**
+ * Result of a `splitContextsIntoBudgetedSlots` call.
+ */
+export interface SlotSplitResult {
+  /** Contexts record for each slot (primary slot first). */
+  slots: Array<Record<string, number>>;
+  /**
+   * Extra slot IDs allocated beyond the first. Length is `slots.length - 1`.
+   * The caller is responsible for persisting these.
+   */
+  extraSlotIds: string[];
+}
+
+/**
+ * Partition `channelEntries` across slots so each slot's blob fits within
+ * `maxBytes`. Thread/msg entries are added to the primary slot (index 0) and
+ * trimmed to budget.
+ *
+ * `initialSlotCount` is the number of slots already available (≥ 1). If the
+ * initial distribution doesn't fit, new slot IDs are generated via
+ * `slotIdGenerator` until everything fits or `maxSlots` is reached.
+ *
+ * Returns `{ slots, extraSlotIds }` on success, or `null` when even `maxSlots`
+ * slots can't accommodate all channel keys.
+ *
+ * Exported for unit testing; callers should prefer `splitContextsIntoSlots()`.
+ */
+export function splitContextsIntoBudgetedSlots(args: {
+  channelEntries: [string, number][];
+  threadMsgEntries: [string, number][];
+  clientId: string;
+  initialSlotCount: number;
+  maxSlots: number;
+  maxBytes: number;
+  slotIdGenerator: () => string;
+}): SlotSplitResult | null {
+  const {
+    channelEntries,
+    threadMsgEntries,
+    clientId,
+    initialSlotCount,
+    maxSlots,
+    maxBytes,
+    slotIdGenerator,
+  } = args;
+
+  const encoder = new TextEncoder();
+  const blobFor = (c: Record<string, number>) =>
+    JSON.stringify({ v: 1, client_id: clientId, contexts: c });
+
+  let slotCount = initialSlotCount;
+  const extraSlotIds: string[] = [];
+
+  // Distribute channel keys and check fit. Grow slot count until all fit.
+  const distribute = (count: number): Array<Record<string, number>> => {
+    const slotContexts: Array<Record<string, number>> = Array.from(
+      { length: count },
+      () => ({}),
+    );
+    for (let i = 0; i < channelEntries.length; i++) {
+      const [key, ts] = channelEntries[i];
+      slotContexts[i % count][key] = ts;
+    }
+    return slotContexts;
+  };
+
+  let slotContexts = distribute(slotCount);
+  while (
+    slotContexts.some((c) => encoder.encode(blobFor(c)).length > maxBytes) &&
+    slotCount < maxSlots
+  ) {
+    extraSlotIds.push(slotIdGenerator());
+    slotCount++;
+    slotContexts = distribute(slotCount);
+  }
+
+  if (slotContexts.some((c) => encoder.encode(blobFor(c)).length > maxBytes)) {
+    return null;
+  }
+
+  // Add thread/msg entries to the primary slot and trim to budget.
+  for (const [key, ts] of threadMsgEntries) {
+    slotContexts[0][key] = ts;
+  }
+  trimContextsToBudget(slotContexts[0], clientId, maxBytes);
+
+  return { slots: slotContexts, extraSlotIds };
+}
+
+/**
  * Result of a `trimContextsToBudget` call.
  */
 export interface TrimResult {
@@ -650,7 +739,17 @@ export class ReadStateManager {
       return;
     }
 
-    // Suppress no-op publishes.
+    // Transitioning from split to single mode: delete stale extra-slot blobs
+    // from the relay so fetchOwnBlobBeforePublish stops re-inflating
+    // lastPublishedContexts from them.
+    if (this.extraSlotIds.length > 0) {
+      await this.deleteExtraSlots();
+    }
+
+    // Suppress no-op publishes. Reset lastPublishedContexts first so stale
+    // keys from a previous split don't cause isIdenticalToLastPublished to
+    // return false forever.
+    this.lastPublishedContexts = {};
     if (this.isIdenticalToLastPublished(contexts)) return;
 
     await this.publishOneSlot(this.slotId, contexts);
@@ -728,6 +827,18 @@ export class ReadStateManager {
     const slots = this.splitContextsIntoSlots();
     if (slots === null) return; // Truly degenerate — already logged.
 
+    // No-op suppression: compute the union of all slot contexts and skip if
+    // nothing changed since the last publish. Without this, every debounce
+    // cycle in split mode would re-publish all slots unconditionally.
+    const unionContexts: Record<string, number> = {};
+    for (const { contexts } of slots) {
+      for (const [key, ts] of Object.entries(contexts)) {
+        const existing = unionContexts[key];
+        if (existing === undefined || ts > existing) unionContexts[key] = ts;
+      }
+    }
+    if (this.isIdenticalToLastPublished(unionContexts)) return;
+
     // Reset lastPublishedContexts before the multi-slot publish so we can
     // rebuild it as the union of all slots.
     this.lastPublishedContexts = {};
@@ -735,6 +846,39 @@ export class ReadStateManager {
     for (const { slotId, contexts } of slots) {
       await this.publishOneSlot(slotId, contexts);
     }
+  }
+
+  /**
+   * Publish NIP-09 kind:5 delete events for all extra slot blobs, then clear
+   * extraSlotIds. Called when transitioning from split mode back to single-slot
+   * mode to prevent stale extra-slot blobs from re-inflating lastPublishedContexts
+   * via fetchOwnBlobBeforePublish on every subsequent publish cycle.
+   */
+  private async deleteExtraSlots(): Promise<void> {
+    for (const slotId of this.extraSlotIds) {
+      try {
+        const aTagValue = `${KIND_READ_STATE}:${this.pubkey}:${READ_STATE_D_TAG_PREFIX}${slotId}`;
+        const event = await signRelayEvent({
+          kind: 5,
+          content: "",
+          tags: [["a", aTagValue]],
+        });
+        await this.relayClient.publishEvent(
+          event,
+          "Timed out deleting extra read-state slot.",
+          "Failed to delete extra read-state slot.",
+        );
+        console.debug(`[ReadStateManager] deleted extra slot slotId=${slotId}`);
+      } catch (error) {
+        console.debug(
+          `[ReadStateManager] deleteExtraSlots failed for slotId=${slotId}:`,
+          error,
+        );
+        // Non-fatal: stale blob will expire from relay within the horizon window.
+      }
+    }
+    this.extraSlotIds = [];
+    saveExtraSlotIds(this.pubkey, []);
   }
 
   private async fetchOwnBlobBeforePublish(): Promise<void> {
@@ -820,68 +964,38 @@ export class ReadStateManager {
    * record per slot (primary slot first, extra slots following). Returns null
    * when even READ_STATE_MAX_SLOTS slots can't accommodate all channel keys.
    *
-   * Only channel keys are distributed across slots — thread: and msg: entries
-   * (already semantically evicted where possible) go into the primary slot and
-   * are trimmed by the byte-budget guard there.
+   * Channel keys are distributed round-robin across all slots. Thread: and
+   * msg: entries (already semantically evicted where possible) are added to
+   * the primary slot and trimmed by the byte-budget guard there.
    */
   private splitContextsIntoSlots(): Array<{
     slotId: string;
     contexts: Record<string, number>;
   }> | null {
-    // Collect all channel keys (non-msg:, non-thread: entries).
+    // Separate channel keys from thread/msg entries.
     const channelEntries: [string, number][] = [];
+    const threadMsgEntries: [string, number][] = [];
     for (const [ctx, ts] of this.effectiveState) {
       if (!this.publishableContextIds.has(ctx)) continue;
-      if (ctx.startsWith(MSG_PREFIX) || ctx.startsWith(THREAD_PREFIX)) continue;
-      channelEntries.push([ctx, ts]);
+      if (ctx.startsWith(MSG_PREFIX) || ctx.startsWith(THREAD_PREFIX)) {
+        threadMsgEntries.push([ctx, ts]);
+      } else {
+        channelEntries.push([ctx, ts]);
+      }
     }
 
-    // Distribute channel keys round-robin across available slot IDs.
     const allSlotIds = [this.slotId, ...this.extraSlotIds];
-    const slotContexts: Array<Record<string, number>> = allSlotIds.map(
-      () => ({}),
-    );
-    for (let i = 0; i < channelEntries.length; i++) {
-      const slotIndex = i % allSlotIds.length;
-      const [key, ts] = channelEntries[i];
-      slotContexts[slotIndex][key] = ts;
-    }
+    const result = splitContextsIntoBudgetedSlots({
+      channelEntries,
+      threadMsgEntries,
+      clientId: this.clientId,
+      initialSlotCount: allSlotIds.length,
+      maxSlots: READ_STATE_MAX_SLOTS,
+      maxBytes: READ_STATE_MAX_PLAINTEXT_BYTES,
+      slotIdGenerator: () => generateHex(16),
+    });
 
-    // Check if all slots fit within budget. If not, we need more slots.
-    const encoder = new TextEncoder();
-    const blobFor = (c: Record<string, number>) =>
-      JSON.stringify({ v: 1, client_id: this.clientId, contexts: c });
-
-    let allFit = slotContexts.every(
-      (c) =>
-        encoder.encode(blobFor(c)).length <= READ_STATE_MAX_PLAINTEXT_BYTES,
-    );
-
-    // Grow the slot list until everything fits or we hit the cap.
-    while (!allFit && allSlotIds.length < READ_STATE_MAX_SLOTS) {
-      const newSlotId = generateHex(16);
-      allSlotIds.push(newSlotId);
-      slotContexts.push({});
-
-      // Re-distribute from scratch with the larger slot count.
-      for (const sc of slotContexts) {
-        for (const key of Object.keys(sc)) {
-          delete sc[key];
-        }
-      }
-      for (let i = 0; i < channelEntries.length; i++) {
-        const slotIndex = i % allSlotIds.length;
-        const [key, ts] = channelEntries[i];
-        slotContexts[slotIndex][key] = ts;
-      }
-
-      allFit = slotContexts.every(
-        (c) =>
-          encoder.encode(blobFor(c)).length <= READ_STATE_MAX_PLAINTEXT_BYTES,
-      );
-    }
-
-    if (!allFit) {
+    if (result === null) {
       console.error(
         `[ReadStateManager] splitContextsIntoSlots: ${channelEntries.length} channel keys exceed ${READ_STATE_MAX_SLOTS}-slot budget — suppressing publish`,
       );
@@ -889,15 +1003,16 @@ export class ReadStateManager {
     }
 
     // Persist any newly allocated extra slot IDs.
-    const newExtraSlotIds = allSlotIds.slice(1);
+    const newExtraSlotIds = [...allSlotIds.slice(1), ...result.extraSlotIds];
     if (newExtraSlotIds.length !== this.extraSlotIds.length) {
       this.extraSlotIds = newExtraSlotIds;
       saveExtraSlotIds(this.pubkey, this.extraSlotIds);
     }
 
-    return allSlotIds.map((slotId, i) => ({
+    const finalSlotIds = [...allSlotIds, ...result.extraSlotIds];
+    return finalSlotIds.map((slotId, i) => ({
       slotId,
-      contexts: slotContexts[i],
+      contexts: result.slots[i],
     }));
   }
 
