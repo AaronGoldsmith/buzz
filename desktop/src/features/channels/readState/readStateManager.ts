@@ -741,15 +741,16 @@ export class ReadStateManager {
 
     // Transitioning from split to single mode: delete stale extra-slot blobs
     // from the relay so fetchOwnBlobBeforePublish stops re-inflating
-    // lastPublishedContexts from them.
+    // lastPublishedContexts from them. Reset lastPublishedContexts here (inside
+    // the guard) so stale keys from the previous split don't cause
+    // isIdenticalToLastPublished to return false forever. The reset must stay
+    // inside the guard — resetting unconditionally would clear the relay-fetched
+    // state on every debounce cycle and reintroduce the retry storm.
     if (this.extraSlotIds.length > 0) {
       await this.deleteExtraSlots();
+      this.lastPublishedContexts = {};
     }
 
-    // Suppress no-op publishes. Reset lastPublishedContexts first so stale
-    // keys from a previous split don't cause isIdenticalToLastPublished to
-    // return false forever.
-    this.lastPublishedContexts = {};
     if (this.isIdenticalToLastPublished(contexts)) return;
 
     await this.publishOneSlot(this.slotId, contexts);
