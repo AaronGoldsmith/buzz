@@ -11,11 +11,13 @@ import {
   READ_STATE_FETCH_LIMIT,
   READ_STATE_HORIZON_SECONDS,
   READ_STATE_MAX_PLAINTEXT_BYTES,
+  READ_STATE_MAX_SLOTS,
   MSG_PREFIX,
   THREAD_PREFIX,
   isValidBlob,
   isValidReadStateDTag,
   sanitizeContexts,
+  localExtraSlotIdsKey,
   type ReadStateBlob,
 } from "@/features/channels/readState/readStateFormat";
 import {
@@ -48,6 +50,24 @@ function clientIdKey(pubkey: string): string {
 
 function slotIdKey(pubkey: string): string {
   return `${SLOT_ID_KEY_PREFIX}:${pubkey}`;
+}
+
+function loadExtraSlotIds(pubkey: string): string[] {
+  try {
+    const raw = localStorage.getItem(localExtraSlotIdsKey(pubkey));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(
+      (v): v is string => typeof v === "string" && v.length > 0,
+    );
+  } catch {
+    return [];
+  }
+}
+
+function saveExtraSlotIds(pubkey: string, ids: string[]): void {
+  localStorage.setItem(localExtraSlotIdsKey(pubkey), JSON.stringify(ids));
 }
 
 export type ApplyRemoteContextResult = "unchanged" | "advanced";
@@ -121,6 +141,38 @@ export function applyRemoteContextTimestamp(args: {
     contextSourceCreatedAt.set(contextId, eventCreatedAt);
   }
   return result;
+}
+
+/**
+ * Semantic eviction (NIP-RS §Eviction): remove `thread:` and `msg:` entries
+ * from `contexts` whose timestamp is already covered by their parent channel
+ * frontier. Mutates `contexts` in place.
+ *
+ * Returns the number of entries removed. Skips entries whose parent cannot be
+ * resolved (parentResolver returns null) — we never evict what we can't verify.
+ * Channel keys (not starting with MSG_PREFIX or THREAD_PREFIX) are never touched.
+ *
+ * Exported for unit testing; callers should prefer `currentContexts()`.
+ */
+export function evictDominatedEntries(
+  contexts: Record<string, number>,
+  effectiveState: Map<string, number>,
+  parentResolver: ContextParentResolver,
+): number {
+  let evicted = 0;
+  for (const [key, ts] of Object.entries(contexts)) {
+    if (!key.startsWith(MSG_PREFIX) && !key.startsWith(THREAD_PREFIX)) {
+      continue;
+    }
+    const parentId = parentResolver(key);
+    if (parentId === null) continue;
+    const parentTs = effectiveState.get(parentId);
+    if (parentTs !== undefined && ts <= parentTs) {
+      delete contexts[key];
+      evicted++;
+    }
+  }
+  return evicted;
 }
 
 /**
@@ -199,6 +251,7 @@ export class ReadStateManager {
   private relayClient: RelayClient;
   private clientId: string;
   private slotId: string;
+  private extraSlotIds: string[];
   private effectiveState = new Map<string, number>();
   private publishableContextIds = new Set<string>();
   private lastPublishedContexts: Record<string, number> = {};
@@ -221,6 +274,7 @@ export class ReadStateManager {
     this.slotId = getOrCreatePersisted(slotIdKey(pubkey), () =>
       generateHex(16),
     );
+    this.extraSlotIds = loadExtraSlotIds(pubkey);
   }
 
   async initialize(): Promise<void> {
@@ -236,10 +290,10 @@ export class ReadStateManager {
     await this.startLiveSubscription();
     if (this.destroyed) return;
     const initContexts = this.currentContexts();
-    if (
-      initContexts !== null &&
-      !this.isIdenticalToLastPublished(initContexts)
-    ) {
+    if (initContexts === null) {
+      // Channel keys exceed single-slot budget — schedule a multi-slot publish.
+      this.schedulePublish();
+    } else if (!this.isIdenticalToLastPublished(initContexts)) {
       this.schedulePublish();
     }
 
@@ -365,8 +419,12 @@ export class ReadStateManager {
   }
 
   private async mergeEvents(events: RelayEvent[]): Promise<void> {
-    let ownBlob: ReadStateBlob | null = null;
-    let ownBlobCreatedAt = 0;
+    // Collect all own blobs (keyed by slot d-tag) to union them all.
+    // NIP-RS: multiple own-slot blobs must be max-merged, not winner-takes-all.
+    const ownBlobsBySlot = new Map<
+      string,
+      { blob: ReadStateBlob; createdAt: number }
+    >();
 
     for (const event of events) {
       if (event.pubkey !== this.pubkey) continue;
@@ -419,9 +477,10 @@ export class ReadStateManager {
       }
 
       if (blob.client_id === this.clientId) {
-        if (event.created_at > ownBlobCreatedAt) {
-          ownBlob = blob;
-          ownBlobCreatedAt = event.created_at;
+        const slotKey = dTag[1];
+        const existing = ownBlobsBySlot.get(slotKey);
+        if (!existing || event.created_at > existing.createdAt) {
+          ownBlobsBySlot.set(slotKey, { blob, createdAt: event.created_at });
         }
       }
     }
@@ -451,11 +510,21 @@ export class ReadStateManager {
       }
     }
 
-    if (ownBlob) {
-      this.lastPublishedContexts = { ...ownBlob.contexts };
-      for (const contextId of Object.keys(ownBlob.contexts)) {
-        this.publishableContextIds.add(contextId);
+    // Union all own-slot blobs into lastPublishedContexts (max-merge).
+    if (ownBlobsBySlot.size > 0) {
+      const unionContexts: Record<string, number> = {};
+      for (const { blob } of ownBlobsBySlot.values()) {
+        for (const [key, ts] of Object.entries(blob.contexts)) {
+          const existing = unionContexts[key];
+          if (existing === undefined || ts > existing) {
+            unionContexts[key] = ts;
+          }
+        }
+        for (const contextId of Object.keys(blob.contexts)) {
+          this.publishableContextIds.add(contextId);
+        }
       }
+      this.lastPublishedContexts = unionContexts;
     }
   }
 
@@ -575,9 +644,26 @@ export class ReadStateManager {
     // Build blob from contexts this client is allowed to publish.
     const contexts = this.currentContexts();
 
-    // Suppress no-op publishes; also skip if the blob cannot fit within budget.
-    if (contexts === null || this.isIdenticalToLastPublished(contexts)) return;
+    if (contexts === null) {
+      // Channel keys alone exceed the single-slot budget — split across slots.
+      await this.publishSplitSlots();
+      return;
+    }
 
+    // Suppress no-op publishes.
+    if (this.isIdenticalToLastPublished(contexts)) return;
+
+    await this.publishOneSlot(this.slotId, contexts);
+  }
+
+  /**
+   * Publish a single slot's blob. Updates lastPublishedContexts and
+   * maxFetchedCreatedAt on success.
+   */
+  private async publishOneSlot(
+    slotId: string,
+    contexts: Record<string, number>,
+  ): Promise<void> {
     const blob: ReadStateBlob = {
       v: 1,
       client_id: this.clientId,
@@ -588,7 +674,7 @@ export class ReadStateManager {
       const plaintext = JSON.stringify(blob);
       const ciphertext = await nip44EncryptToSelf(plaintext);
 
-      const dTagValue = `read-state:${this.slotId}`;
+      const dTagValue = `read-state:${slotId}`;
       const tags: string[][] = [
         ["d", dTagValue],
         ["t", "read-state"],
@@ -611,7 +697,7 @@ export class ReadStateManager {
         "Failed to publish read state.",
       );
       console.debug(
-        `[ReadStateManager] publish accepted createdAt=${createdAt}`,
+        `[ReadStateManager] publish accepted slotId=${slotId} createdAt=${createdAt}`,
       );
 
       for (const key of Object.keys(contexts)) {
@@ -619,7 +705,10 @@ export class ReadStateManager {
           this.contextSourceCreatedAt.set(key, createdAt);
         }
       }
-      this.lastPublishedContexts = contexts;
+      // Merge this slot's contexts into lastPublishedContexts (union).
+      for (const [key, ts] of Object.entries(contexts)) {
+        this.lastPublishedContexts[key] = ts;
+      }
       this.maxFetchedCreatedAt = Math.max(
         this.maxFetchedCreatedAt,
         event.created_at,
@@ -630,12 +719,33 @@ export class ReadStateManager {
     }
   }
 
+  /**
+   * Multi-slot publish path. Invoked when channel keys alone exceed the
+   * single-slot byte budget. Partitions channel keys across slots and
+   * publishes each independently.
+   */
+  private async publishSplitSlots(): Promise<void> {
+    const slots = this.splitContextsIntoSlots();
+    if (slots === null) return; // Truly degenerate — already logged.
+
+    // Reset lastPublishedContexts before the multi-slot publish so we can
+    // rebuild it as the union of all slots.
+    this.lastPublishedContexts = {};
+
+    for (const { slotId, contexts } of slots) {
+      await this.publishOneSlot(slotId, contexts);
+    }
+  }
+
   private async fetchOwnBlobBeforePublish(): Promise<void> {
+    // Fetch all own slots — primary + any extra slots allocated for splitting.
+    const allSlotIds = [this.slotId, ...this.extraSlotIds];
+    const dTags = allSlotIds.map((id) => `${READ_STATE_D_TAG_PREFIX}${id}`);
     try {
       const events = await this.relayClient.fetchEvents({
         kinds: [KIND_READ_STATE],
         authors: [this.pubkey],
-        "#d": [`${READ_STATE_D_TAG_PREFIX}${this.slotId}`],
+        "#d": dTags,
         limit: READ_STATE_FETCH_LIMIT,
       });
 
@@ -671,10 +781,18 @@ export class ReadStateManager {
       contexts[ctx] = ts;
     }
 
-    // Enforce a serialized byte-size budget before encryption. Entry count is
-    // the wrong metric — the relay rejects on byte size, not entry count. Evict
-    // oldest msg: entries first (lowest timestamp), then thread: entries, until
-    // the JSON fits. Channel keys are never evicted.
+    // Phase 1: Semantic eviction (NIP-RS §Eviction).
+    // Drop thread: and msg: entries whose timestamp is already covered by the
+    // channel frontier — they are semantically inert and waste blob space.
+    // Only runs when parentResolver is set; skips silently when null so we
+    // never evict an entry we can't verify is dominated.
+    if (this.parentResolver !== null) {
+      evictDominatedEntries(contexts, this.effectiveState, this.parentResolver);
+    }
+
+    // Phase 2a: Byte-budget trim (reactive backstop).
+    // Evict oldest msg: then thread: entries until the blob fits 32 KB.
+    // Channel keys are never evicted here.
     const { evicted, fitsAfterTrim } = trimContextsToBudget(
       contexts,
       this.clientId,
@@ -686,13 +804,101 @@ export class ReadStateManager {
       );
     }
     if (!fitsAfterTrim) {
-      console.error(
-        "[ReadStateManager] currentContexts: blob exceeds byte budget even after full eviction — skipping publish",
+      // Channel keys alone exceed budget — caller must use multi-slot split.
+      console.warn(
+        "[ReadStateManager] currentContexts: channel keys exceed byte budget — will split across slots",
       );
       return null;
     }
 
     return contexts;
+  }
+
+  /**
+   * Partition the full publishable contexts across multiple slots when channel
+   * keys alone exceed READ_STATE_MAX_PLAINTEXT_BYTES. Returns one contexts
+   * record per slot (primary slot first, extra slots following). Returns null
+   * when even READ_STATE_MAX_SLOTS slots can't accommodate all channel keys.
+   *
+   * Only channel keys are distributed across slots — thread: and msg: entries
+   * (already semantically evicted where possible) go into the primary slot and
+   * are trimmed by the byte-budget guard there.
+   */
+  private splitContextsIntoSlots(): Array<{
+    slotId: string;
+    contexts: Record<string, number>;
+  }> | null {
+    // Collect all channel keys (non-msg:, non-thread: entries).
+    const channelEntries: [string, number][] = [];
+    for (const [ctx, ts] of this.effectiveState) {
+      if (!this.publishableContextIds.has(ctx)) continue;
+      if (ctx.startsWith(MSG_PREFIX) || ctx.startsWith(THREAD_PREFIX)) continue;
+      channelEntries.push([ctx, ts]);
+    }
+
+    // Distribute channel keys round-robin across available slot IDs.
+    const allSlotIds = [this.slotId, ...this.extraSlotIds];
+    const slotContexts: Array<Record<string, number>> = allSlotIds.map(
+      () => ({}),
+    );
+    for (let i = 0; i < channelEntries.length; i++) {
+      const slotIndex = i % allSlotIds.length;
+      const [key, ts] = channelEntries[i];
+      slotContexts[slotIndex][key] = ts;
+    }
+
+    // Check if all slots fit within budget. If not, we need more slots.
+    const encoder = new TextEncoder();
+    const blobFor = (c: Record<string, number>) =>
+      JSON.stringify({ v: 1, client_id: this.clientId, contexts: c });
+
+    let allFit = slotContexts.every(
+      (c) =>
+        encoder.encode(blobFor(c)).length <= READ_STATE_MAX_PLAINTEXT_BYTES,
+    );
+
+    // Grow the slot list until everything fits or we hit the cap.
+    while (!allFit && allSlotIds.length < READ_STATE_MAX_SLOTS) {
+      const newSlotId = generateHex(16);
+      allSlotIds.push(newSlotId);
+      slotContexts.push({});
+
+      // Re-distribute from scratch with the larger slot count.
+      for (const sc of slotContexts) {
+        for (const key of Object.keys(sc)) {
+          delete sc[key];
+        }
+      }
+      for (let i = 0; i < channelEntries.length; i++) {
+        const slotIndex = i % allSlotIds.length;
+        const [key, ts] = channelEntries[i];
+        slotContexts[slotIndex][key] = ts;
+      }
+
+      allFit = slotContexts.every(
+        (c) =>
+          encoder.encode(blobFor(c)).length <= READ_STATE_MAX_PLAINTEXT_BYTES,
+      );
+    }
+
+    if (!allFit) {
+      console.error(
+        `[ReadStateManager] splitContextsIntoSlots: ${channelEntries.length} channel keys exceed ${READ_STATE_MAX_SLOTS}-slot budget — suppressing publish`,
+      );
+      return null;
+    }
+
+    // Persist any newly allocated extra slot IDs.
+    const newExtraSlotIds = allSlotIds.slice(1);
+    if (newExtraSlotIds.length !== this.extraSlotIds.length) {
+      this.extraSlotIds = newExtraSlotIds;
+      saveExtraSlotIds(this.pubkey, this.extraSlotIds);
+    }
+
+    return allSlotIds.map((slotId, i) => ({
+      slotId,
+      contexts: slotContexts[i],
+    }));
   }
 
   private hydrateFromLocalStorage(): void {

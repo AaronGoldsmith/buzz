@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   applyRemoteContextTimestamp,
+  evictDominatedEntries,
   resolveEffectiveTimestamp,
   trimContextsToBudget,
 } from "./readStateManager.ts";
@@ -299,4 +300,104 @@ test("trimContextsToBudget_channelOnlyBlobExceedsBudget_fitsAfterTrimFalse", () 
   assert.equal(fitsAfterTrim, false, "channel-only blob still exceeds budget");
   // Channel key must still be present.
   assert.ok("channel:some-channel-id" in contexts);
+});
+
+// ── evictDominatedEntries ─────────────────────────────────────────────────────
+
+const CHANNEL_ID = "channel-abc";
+const THREAD_ID_A = "a".repeat(64);
+const MSG_ID_A = "b".repeat(64);
+
+const threadResolver = (ctx) => {
+  if (ctx.startsWith("thread:") || ctx.startsWith("msg:")) return CHANNEL_ID;
+  return null;
+};
+
+test("evictDominatedEntries_dominatedThreadAndMsg_evictedChannelSurvives", () => {
+  // Channel read at 500; thread read at 300 (dominated); msg read at 200 (dominated).
+  const effectiveState = new Map([
+    [CHANNEL_ID, 500],
+    [`thread:${THREAD_ID_A}`, 300],
+    [`msg:${MSG_ID_A}`, 200],
+  ]);
+  const contexts = {
+    [CHANNEL_ID]: 500,
+    [`thread:${THREAD_ID_A}`]: 300,
+    [`msg:${MSG_ID_A}`]: 200,
+  };
+
+  const count = evictDominatedEntries(contexts, effectiveState, threadResolver);
+
+  assert.equal(count, 2, "both dominated entries evicted");
+  assert.ok(!(`thread:${THREAD_ID_A}` in contexts), "thread entry evicted");
+  assert.ok(!(`msg:${MSG_ID_A}` in contexts), "msg entry evicted");
+  assert.ok(CHANNEL_ID in contexts, "channel key survives");
+});
+
+test("evictDominatedEntries_threadNewerThanChannel_notEvicted", () => {
+  // Thread read at 600 > channel at 500 — thread is NOT dominated.
+  const effectiveState = new Map([
+    [CHANNEL_ID, 500],
+    [`thread:${THREAD_ID_A}`, 600],
+  ]);
+  const contexts = {
+    [CHANNEL_ID]: 500,
+    [`thread:${THREAD_ID_A}`]: 600,
+  };
+
+  const count = evictDominatedEntries(contexts, effectiveState, threadResolver);
+
+  assert.equal(count, 0, "no entries evicted when thread is newer");
+  assert.ok(`thread:${THREAD_ID_A}` in contexts, "thread entry survives");
+});
+
+test("evictDominatedEntries_threadEqualToChannel_evicted", () => {
+  // ts === parentTs is dominated (<=).
+  const effectiveState = new Map([
+    [CHANNEL_ID, 400],
+    [`thread:${THREAD_ID_A}`, 400],
+  ]);
+  const contexts = {
+    [`thread:${THREAD_ID_A}`]: 400,
+  };
+
+  const count = evictDominatedEntries(contexts, effectiveState, threadResolver);
+
+  assert.equal(count, 1);
+  assert.ok(!(`thread:${THREAD_ID_A}` in contexts), "equal-ts entry evicted");
+});
+
+test("evictDominatedEntries_unresolvedParent_notEvicted", () => {
+  // Resolver returns null for this key — must not evict.
+  const effectiveState = new Map([[`thread:${THREAD_ID_A}`, 300]]);
+  const contexts = { [`thread:${THREAD_ID_A}`]: 300 };
+  const nullResolver = () => null;
+
+  const count = evictDominatedEntries(contexts, effectiveState, nullResolver);
+
+  assert.equal(count, 0, "no eviction when parent unresolvable");
+  assert.ok(`thread:${THREAD_ID_A}` in contexts);
+});
+
+test("evictDominatedEntries_parentNotInEffectiveState_notEvicted", () => {
+  // Parent resolves to CHANNEL_ID but CHANNEL_ID has no entry in effectiveState.
+  const effectiveState = new Map([[`thread:${THREAD_ID_A}`, 300]]);
+  const contexts = { [`thread:${THREAD_ID_A}`]: 300 };
+
+  const count = evictDominatedEntries(contexts, effectiveState, threadResolver);
+
+  assert.equal(count, 0, "no eviction when parent has no frontier");
+  assert.ok(`thread:${THREAD_ID_A}` in contexts);
+});
+
+test("evictDominatedEntries_channelKeysNeverTouched", () => {
+  // Channel keys don't start with thread: or msg: — must never be evicted.
+  const effectiveState = new Map([[CHANNEL_ID, 999]]);
+  const contexts = { [CHANNEL_ID]: 999, "other-key": 100 };
+
+  const count = evictDominatedEntries(contexts, effectiveState, threadResolver);
+
+  assert.equal(count, 0);
+  assert.ok(CHANNEL_ID in contexts, "channel key untouched");
+  assert.ok("other-key" in contexts, "non-prefixed key untouched");
 });
