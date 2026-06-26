@@ -509,7 +509,6 @@ pub fn run() {
             get_managed_agent_log,
             get_agent_models,
             get_agent_config_surface,
-            write_agent_config_field,
             put_agent_session_config,
             mesh_availability,
             mesh_start_node,

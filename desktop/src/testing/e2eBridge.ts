@@ -1017,8 +1017,6 @@ function buildMockConfigSurface(pubkey: string): {
       model: {
         value: "gpt-4o",
         origin: "buzzExplicit",
-        isWritable: true,
-        writeVia: { type: "acpSetSessionModel" },
         overriddenValue: "gpt-4o-mini",
         overriddenOrigin: "configFile",
         isRequired: false,
@@ -1026,8 +1024,6 @@ function buildMockConfigSurface(pubkey: string): {
       provider: {
         value: "openai",
         origin: "configFile",
-        isWritable: false,
-        writeVia: { type: "readOnly" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1035,8 +1031,6 @@ function buildMockConfigSurface(pubkey: string): {
       mode: {
         value: "auto",
         origin: "envVar",
-        isWritable: true,
-        writeVia: { type: "respawnWithEnvVar", envKey: "GOOSE_MODE" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1044,11 +1038,6 @@ function buildMockConfigSurface(pubkey: string): {
       thinkingEffort: {
         value: "medium",
         origin: "configFile",
-        isWritable: true,
-        writeVia: {
-          type: "gooseNativeConfigWrite",
-          configKey: "GOOSE_THINKING_EFFORT",
-        },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1064,8 +1053,6 @@ function buildMockConfigSurface(pubkey: string): {
         value: "enabled",
         origin: "configFile",
         schemaType: { type: "enum", options: ["enabled", "disabled"] },
-        isWritable: false,
-        writeVia: { type: "readOnly" },
       },
       {
         key: "extensions.web_search",
@@ -1073,8 +1060,6 @@ function buildMockConfigSurface(pubkey: string): {
         value: "enabled",
         origin: "configFile",
         schemaType: { type: "enum", options: ["enabled", "disabled"] },
-        isWritable: false,
-        writeVia: { type: "readOnly" },
       },
       {
         key: "extensions.memory",
@@ -1082,8 +1067,6 @@ function buildMockConfigSurface(pubkey: string): {
         value: "disabled",
         origin: "configFile",
         schemaType: { type: "enum", options: ["enabled", "disabled"] },
-        isWritable: false,
-        writeVia: { type: "readOnly" },
       },
     ],
     sources: {
@@ -1104,8 +1087,6 @@ function buildMockConfigSurface(pubkey: string): {
       model: {
         value: "claude-sonnet-4-20250514",
         origin: "acpConfigOption",
-        isWritable: true,
-        writeVia: { type: "acpSetConfigOption", configId: "model" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1113,8 +1094,6 @@ function buildMockConfigSurface(pubkey: string): {
       provider: {
         value: "anthropic",
         origin: "acpConfigOption",
-        isWritable: false,
-        writeVia: { type: "readOnly" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1122,8 +1101,6 @@ function buildMockConfigSurface(pubkey: string): {
       mode: {
         value: "code",
         origin: "acpConfigOption",
-        isWritable: true,
-        writeVia: { type: "acpSetConfigOption", configId: "mode" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1131,11 +1108,6 @@ function buildMockConfigSurface(pubkey: string): {
       thinkingEffort: {
         value: "high",
         origin: "acpConfigOption",
-        isWritable: true,
-        writeVia: {
-          type: "acpSetConfigOption",
-          configId: "thinking_effort",
-        },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1143,11 +1115,6 @@ function buildMockConfigSurface(pubkey: string): {
       maxOutputTokens: {
         value: "16384",
         origin: "acpConfigOption",
-        isWritable: true,
-        writeVia: {
-          type: "acpSetConfigOption",
-          configId: "max_output_tokens",
-        },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1174,8 +1141,6 @@ function buildMockConfigSurface(pubkey: string): {
       model: {
         value: "gpt-4o-mini",
         origin: "configFile",
-        isWritable: false,
-        writeVia: { type: "readOnly" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1183,8 +1148,6 @@ function buildMockConfigSurface(pubkey: string): {
       provider: {
         value: "openai",
         origin: "configFile",
-        isWritable: false,
-        writeVia: { type: "readOnly" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1192,8 +1155,6 @@ function buildMockConfigSurface(pubkey: string): {
       mode: {
         value: null,
         origin: "acpNativeRead",
-        isWritable: false,
-        writeVia: { type: "readOnly" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1201,8 +1162,6 @@ function buildMockConfigSurface(pubkey: string): {
       thinkingEffort: {
         value: null,
         origin: "acpNativeRead",
-        isWritable: false,
-        writeVia: { type: "readOnly" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1230,8 +1189,6 @@ function buildMockConfigSurface(pubkey: string): {
       model: {
         value: "codex-mini",
         origin: "configFile",
-        isWritable: true,
-        writeVia: { type: "respawnWithEnvVar", envKey: "CODEX_MODEL" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1239,8 +1196,6 @@ function buildMockConfigSurface(pubkey: string): {
       provider: {
         value: "openai",
         origin: "configFile",
-        isWritable: false,
-        writeVia: { type: "readOnly" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1248,8 +1203,6 @@ function buildMockConfigSurface(pubkey: string): {
       mode: {
         value: "suggest / auto-edit",
         origin: "configFile",
-        isWritable: true,
-        writeVia: { type: "respawnWithEnvVar", envKey: "CODEX_MODE" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1269,8 +1222,6 @@ function buildMockConfigSurface(pubkey: string): {
           type: "enum",
           options: ["suggest", "auto-edit", "full-auto", "unless-allow-listed"],
         },
-        isWritable: false,
-        writeVia: { type: "readOnly" },
       },
       {
         key: "sandbox_mode",
@@ -1281,8 +1232,6 @@ function buildMockConfigSurface(pubkey: string): {
           type: "enum",
           options: ["container", "host", "none"],
         },
-        isWritable: false,
-        writeVia: { type: "readOnly" },
       },
     ],
     sources: {
@@ -1305,8 +1254,6 @@ function buildMockConfigSurface(pubkey: string): {
       model: {
         value: "claude-opus-4-20250514",
         origin: "runtimeOverride",
-        isWritable: true,
-        writeVia: { type: "acpSetSessionModel" },
         overriddenValue: "gpt-4o",
         overriddenOrigin: "personaDefault",
         isRequired: false,
@@ -1314,8 +1261,6 @@ function buildMockConfigSurface(pubkey: string): {
       provider: {
         value: "anthropic",
         origin: "acpConfigOption",
-        isWritable: false,
-        writeVia: { type: "readOnly" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1323,8 +1268,6 @@ function buildMockConfigSurface(pubkey: string): {
       mode: {
         value: "auto",
         origin: "envVar",
-        isWritable: true,
-        writeVia: { type: "respawnWithEnvVar", envKey: "GOOSE_MODE" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1332,11 +1275,6 @@ function buildMockConfigSurface(pubkey: string): {
       thinkingEffort: {
         value: "high",
         origin: "configFile",
-        isWritable: true,
-        writeVia: {
-          type: "gooseNativeConfigWrite",
-          configKey: "GOOSE_THINKING_EFFORT",
-        },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1367,8 +1305,6 @@ function buildMockConfigSurface(pubkey: string): {
       model: {
         value: "gpt-4o",
         origin: "buzzExplicit",
-        isWritable: true,
-        writeVia: { type: "acpSetSessionModel" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1376,8 +1312,6 @@ function buildMockConfigSurface(pubkey: string): {
       provider: {
         value: "openai",
         origin: "personaDefault",
-        isWritable: false,
-        writeVia: { type: "readOnly" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1385,8 +1319,6 @@ function buildMockConfigSurface(pubkey: string): {
       mode: {
         value: "auto",
         origin: "envVar",
-        isWritable: true,
-        writeVia: { type: "respawnWithEnvVar", envKey: "GOOSE_MODE" },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1394,11 +1326,6 @@ function buildMockConfigSurface(pubkey: string): {
       thinkingEffort: {
         value: "medium",
         origin: "configFile",
-        isWritable: true,
-        writeVia: {
-          type: "gooseNativeConfigWrite",
-          configKey: "GOOSE_THINKING_EFFORT",
-        },
         overriddenValue: null,
         overriddenOrigin: null,
         isRequired: false,
@@ -1418,26 +1345,18 @@ function buildMockConfigSurface(pubkey: string): {
   };
 
   // Map well-known test pubkeys to specific fixtures
-  const PUBKEY_CLAUDE =
-    "953d3363262e86b770419834c53d2446409db6d918a57f8f339d495d54ab001f";
-  const PUBKEY_PRESPAWN =
-    "bb22a5299220cad76ffd46190ccbeede8ab5dc260faa28b6e5a2cb31b9aff260";
-  const PUBKEY_CODEX =
-    "554cef57437abac34522ac2c9f0490d685b72c80478cf9f7ed6f9570ee8624ea";
-  const PUBKEY_RUNTIME_OVERRIDE =
-    "df8e91b86fda13a9a67896df77232f7bdab2ba9c3e165378e1ba3d24c13a328e";
   // Synthetic agent for the multi-origin provenance showcase (not a TEST_IDENTITY).
   const PUBKEY_MULTI_ORIGIN =
     "abc1230000000000000000000000000000000000000000000000000000000def";
 
   switch (pubkey) {
-    case PUBKEY_CLAUDE:
+    case ALICE_PUBKEY:
       return claudeSurface;
-    case PUBKEY_PRESPAWN:
+    case BOB_PUBKEY:
       return preSpawnSurface;
-    case PUBKEY_CODEX:
+    case CHARLIE_PUBKEY:
       return codexSurface;
-    case PUBKEY_RUNTIME_OVERRIDE:
+    case OUTSIDER_PUBKEY:
       return runtimeOverrideSurface;
     case PUBKEY_MULTI_ORIGIN:
       return multiOriginSurface;
