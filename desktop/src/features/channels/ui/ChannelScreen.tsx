@@ -21,10 +21,6 @@ import {
   ChannelPane,
   ForumView,
 } from "@/features/channels/ui/ChannelScreenLazyViews";
-import {
-  getDmAutoRouteAgentPubkeys,
-  getThreadAutoRouteAgentPubkeys,
-} from "@/features/channels/ui/ChannelPane.helpers";
 import { MembersSidebar } from "@/features/channels/ui/MembersSidebar";
 import {
   useManagedAgentsQuery,
@@ -462,37 +458,6 @@ export function ChannelScreen({
       timelineMessages.find((message) => message.id === editTargetId) ?? null,
     [editTargetId, timelineMessages],
   );
-  const routingAgentPubkeys = React.useMemo(() => {
-    const pubkeys = new Set(agentPubkeys);
-    for (const [pubkey, profile] of Object.entries(messageProfiles)) {
-      if (profile?.isAgent) {
-        pubkeys.add(normalizePubkey(pubkey));
-      }
-    }
-    return pubkeys;
-  }, [agentPubkeys, messageProfiles]);
-  const messageAutoRouteAgentPubkeys = React.useMemo(
-    () =>
-      getDmAutoRouteAgentPubkeys({
-        channel: activeChannel,
-        currentPubkey,
-        knownAgentPubkeys: routingAgentPubkeys,
-      }),
-    [activeChannel, currentPubkey, routingAgentPubkeys],
-  );
-  const threadAutoRouteAgentPubkeys = React.useMemo(() => {
-    if (!openThreadHeadMessage) {
-      return [];
-    }
-
-    return getThreadAutoRouteAgentPubkeys({
-      knownAgentPubkeys: routingAgentPubkeys,
-      messages: [
-        openThreadHeadMessage,
-        ...threadMessages.map((entry) => entry.message),
-      ],
-    });
-  }, [openThreadHeadMessage, routingAgentPubkeys, threadMessages]);
   const {
     handleCancelEdit,
     handleCancelThreadReply,
@@ -510,7 +475,6 @@ export function ChannelScreen({
     deleteMessageMutation,
     editMessageMutation,
     editTargetId,
-    messageAutoRouteAgentPubkeys,
     expandedThreadReplyIds,
     getFirstReplyIdForMessage,
     getReplyDescendantIdsForMessage,
@@ -523,7 +487,6 @@ export function ChannelScreen({
     setOpenThreadHeadId,
     setThreadReplyTargetId,
     setThreadScrollTargetId,
-    threadAutoRouteAgentPubkeys,
     threadReplyTargetId,
     toggleReactionMutation,
   });

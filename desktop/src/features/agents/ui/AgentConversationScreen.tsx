@@ -4,11 +4,9 @@ import { toast } from "sonner";
 
 import { buildAgentConversationLink } from "@/features/agents/agentConversationLink";
 import {
-  buildAgentConversationMentionPubkeys,
   buildAgentConversationMarkers,
   buildAgentConversationRecap,
   deriveAgentConversationTitle,
-  getAutoRoutedAgentConversationPubkeys,
   type AgentConversation,
   publishAgentConversationMarker,
 } from "@/features/agents/agentConversations";
@@ -442,10 +440,6 @@ export function AgentConversationScreen({
         .map((participant) => participant.pubkey),
     [agentParticipants],
   );
-  const autoRoutedAgentPubkeys = React.useMemo(
-    () => getAutoRoutedAgentConversationPubkeys(agentParticipants),
-    [agentParticipants],
-  );
   const canMessageAnyAgent = routeableAgentPubkeys.length > 0;
   const restrictedAgentNames = React.useMemo(
     () =>
@@ -531,14 +525,11 @@ export function AgentConversationScreen({
       await sendMessageMutation.mutateAsync({
         content,
         mediaTags,
-        mentionPubkeys: buildAgentConversationMentionPubkeys({
-          autoRouteAgentPubkeys: autoRoutedAgentPubkeys,
-          mentionPubkeys,
-        }),
+        mentionPubkeys,
         parentEventId: conversation.threadRootId,
       });
     },
-    [autoRoutedAgentPubkeys, conversation.threadRootId, sendMessageMutation],
+    [conversation.threadRootId, sendMessageMutation],
   );
 
   const isComposerDisabled =
