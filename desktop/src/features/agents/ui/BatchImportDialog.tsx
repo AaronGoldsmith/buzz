@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/ui/dialog";
+import { resolveManagedAgentAvatarUrl } from "./managedAgentAvatar";
 import { importedAvatarUrl } from "./personaDialogState";
 
 type BatchImportDialogProps = {
@@ -92,7 +93,9 @@ export function BatchImportDialog({
       });
 
       try {
-        const avatarUrl = importedAvatarUrl(persona);
+        const avatarUrl = await resolveManagedAgentAvatarUrl(
+          importedAvatarUrl(persona),
+        );
         await createPersona({
           displayName: persona.displayName,
           avatarUrl: avatarUrl || undefined,

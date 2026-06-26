@@ -8,6 +8,7 @@ import {
   type ParsedPersonaPreview,
 } from "@/shared/api/tauriPersonas";
 import type { AgentPersona, UpdatePersonaInput } from "@/shared/api/types";
+import { resolveManagedAgentAvatarUrl } from "./managedAgentAvatar";
 import { buildPersonaImportPlan } from "./personaImportPlan";
 import {
   editPersonaDialogState,
@@ -109,7 +110,13 @@ export function usePersonaImportActions(
     const selectedFieldSet = new Set(selectedFields);
     const preview = personaImportTargetPreview.preview;
     const existing = personaImportTarget;
-    const avatarUrl = importedAvatarUrl(preview);
+    const avatarUrl = selectedFieldSet.has("avatarUrl")
+      ? await resolveManagedAgentAvatarUrl(
+          importedAvatarUrl(preview),
+          undefined,
+          existing.avatarUrl,
+        )
+      : (existing.avatarUrl ?? undefined);
 
     try {
       const updateInput: UpdatePersonaInput = {
@@ -120,9 +127,7 @@ export function usePersonaImportActions(
         systemPrompt: selectedFieldSet.has("systemPrompt")
           ? preview.systemPrompt
           : existing.systemPrompt,
-        avatarUrl: selectedFieldSet.has("avatarUrl")
-          ? avatarUrl || undefined
-          : (existing.avatarUrl ?? undefined),
+        avatarUrl,
         runtime: selectedFieldSet.has("runtime")
           ? (preview.runtime ?? undefined)
           : (existing.runtime ?? undefined),
