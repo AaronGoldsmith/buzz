@@ -645,6 +645,10 @@ export function getHiddenAgentConversationMessageIds(
     anchorMessageIds.add(marker.agentReplyId);
     anchorMessageIdsByThreadRootId.set(marker.threadRootId, anchorMessageIds);
 
+    if (!marker.agentPubkey || anchorMessage.pubkey !== marker.agentPubkey) {
+      continue;
+    }
+
     const current = cutoffByThreadRootId.get(marker.threadRootId);
     const candidate = {
       anchorIndex,

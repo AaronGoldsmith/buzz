@@ -435,6 +435,50 @@ test("continued conversation marker with a missing anchor does not hide thread m
   assert.deepEqual([...hiddenIds], []);
 });
 
+test("source-message task marker does not hide later thread replies", () => {
+  const root = message({
+    body: "Can you look into the data model?",
+    createdAt: 1,
+    id: "root",
+  });
+  const humanAnchor = message({
+    body: "Let's make this a task.",
+    createdAt: 2,
+    id: "human-anchor",
+  });
+  const laterReply = message({
+    body: "This normal thread reply should stay visible.",
+    createdAt: 3,
+    id: "later",
+  });
+  const marker = parseAgentConversationMarker({
+    ...markerEvent({
+      content: {
+        agentName: "",
+        agentPubkey: "",
+        agentReplyId: "human-anchor",
+        startedAt: 2,
+      },
+      createdAt: 2,
+      id: "source-marker",
+      includeAgent: false,
+    }),
+    tags: [
+      ["h", "channel"],
+      ["e", "root", "", "root"],
+      ["e", "human-anchor", "", "agent-reply"],
+      ["title", "Source task"],
+    ],
+  });
+
+  const hiddenIds = getHiddenAgentConversationMessageIds(
+    [root, humanAnchor, laterReply],
+    marker ? [marker] : [],
+  );
+
+  assert.deepEqual([...hiddenIds], []);
+});
+
 test("continued conversation markers keep later task anchors visible", () => {
   const root = message({
     body: "Can you look into the data model?",
