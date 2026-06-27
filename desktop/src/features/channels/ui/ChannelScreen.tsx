@@ -705,7 +705,7 @@ export function ChannelScreen({
     activeChannel,
     agentConversationMarkers,
     agentLookupReady,
-    agentPubkeys,
+    agentPubkeys: routingAgentPubkeys,
     enabled: isChannelTasksEnabled,
     goChannel,
     openAgentConversation,

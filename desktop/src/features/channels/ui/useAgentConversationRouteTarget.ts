@@ -93,7 +93,7 @@ export function useAgentConversationRouteTarget({
     if (!sourceMessage) {
       return;
     }
-    if (!marker && !agentLookupReady) {
+    if (!marker?.agentPubkey && !agentLookupReady) {
       return;
     }
 
