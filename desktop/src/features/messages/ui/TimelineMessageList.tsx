@@ -421,6 +421,7 @@ function MessageRowItem({
         )}
       >
         <MessageRow
+          agentConversationMarkers={agentConversationMarkers}
           agentPubkeys={agentPubkeys}
           channelId={channelId}
           highlighted={false}
@@ -480,6 +481,7 @@ function MessageRowItem({
   return (
     <div className="flex flex-col gap-1 pb-2.5">
       <MessageRow
+        agentConversationMarkers={agentConversationMarkers}
         agentPubkeys={agentPubkeys}
         channelId={channelId}
         highlighted={message.id === highlightedMessageId || isSearchActive}
