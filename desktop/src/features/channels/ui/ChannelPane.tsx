@@ -47,6 +47,7 @@ import {
   type WelcomeComposerBannerState,
 } from "@/features/channels/ui/WelcomeComposerBanner";
 import {
+  getDmAutoRouteAgentPubkeys,
   getChannelIntroDescription,
   getChannelIntroKind,
   getThreadAutoRouteAgentPubkeys,
@@ -419,6 +420,15 @@ export const ChannelPane = React.memo(function ChannelPane({
 
     return pubkeys;
   }, [activityAgents, agentPubkeys, agentSessionAgents]);
+  const dmAutoRouteAgentPubkeys = React.useMemo(
+    () =>
+      getDmAutoRouteAgentPubkeys({
+        channel: activeChannel,
+        currentPubkey,
+        knownAgentPubkeys,
+      }),
+    [activeChannel, currentPubkey, knownAgentPubkeys],
+  );
   const knownAgentByPubkey = React.useMemo(() => {
     const agents = new Map<string, { name: string; pubkey: string }>();
     const addAgent = (pubkey: string, name?: string | null) => {
@@ -494,9 +504,21 @@ export const ChannelPane = React.memo(function ChannelPane({
         }
       }
 
+      for (const pubkey of dmAutoRouteAgentPubkeys) {
+        const dmAgent = knownAgentByPubkey.get(normalizePubkey(pubkey));
+        if (dmAgent) {
+          return dmAgent;
+        }
+      }
+
       return null;
     },
-    [activeAgentConversationMarkers, activeChannelId, knownAgentByPubkey],
+    [
+      activeAgentConversationMarkers,
+      activeChannelId,
+      dmAutoRouteAgentPubkeys,
+      knownAgentByPubkey,
+    ],
   );
   const completeWelcomeComposerBanner = React.useCallback(() => {
     if (!activeChannelId || !isActiveWelcomeChannel) {
