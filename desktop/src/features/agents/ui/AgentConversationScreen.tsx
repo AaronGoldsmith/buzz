@@ -525,14 +525,18 @@ export function AgentConversationScreen({
       mentionPubkeys: string[],
       mediaTags?: string[][],
     ) => {
+      const sendMentionPubkeys =
+        routeableAgentPubkeys.length === 1
+          ? Array.from(new Set([...mentionPubkeys, routeableAgentPubkeys[0]]))
+          : mentionPubkeys;
       await sendMessageMutation.mutateAsync({
         content,
         mediaTags,
-        mentionPubkeys,
+        mentionPubkeys: sendMentionPubkeys,
         parentEventId: conversation.threadRootId,
       });
     },
-    [conversation.threadRootId, sendMessageMutation],
+    [conversation.threadRootId, routeableAgentPubkeys, sendMessageMutation],
   );
 
   const isComposerDisabled =
