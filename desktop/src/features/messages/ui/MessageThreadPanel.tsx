@@ -643,8 +643,8 @@ export function MessageThreadPanel({
                       onMarkRead={onMarkRead}
                       onOpenAgentConversation={onOpenAgentConversation}
                       onReply={
-                        threadHead
-                          ? () => onSelectReplyTarget(threadHead)
+                        onSelectReplyTarget
+                          ? () => onSelectReplyTarget(entry.message)
                           : undefined
                       }
                       onToggleReaction={onToggleReaction}
