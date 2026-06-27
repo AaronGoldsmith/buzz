@@ -331,15 +331,6 @@ export function ChannelScreen({
     }
     return pubkeys;
   }, [channelMembers, managedAgents, relayAgents]);
-  const dmAutoRouteAgentPubkeys = React.useMemo(
-    () =>
-      getDmAutoRouteAgentPubkeys({
-        channel: activeChannel,
-        currentPubkey,
-        knownAgentPubkeys: agentPubkeys,
-      }),
-    [activeChannel, agentPubkeys, currentPubkey],
-  );
   const {
     agentSessionCandidates,
     botTypingEntries,
@@ -390,6 +381,24 @@ export function ChannelScreen({
     messageProfilesQuery.data?.profiles,
     relayAgents,
   ]);
+  const routingAgentPubkeys = React.useMemo(() => {
+    const pubkeys = new Set(agentPubkeys);
+    for (const [pubkey, profile] of Object.entries(messageProfiles)) {
+      if (profile?.isAgent) {
+        pubkeys.add(normalizePubkey(pubkey));
+      }
+    }
+    return pubkeys;
+  }, [agentPubkeys, messageProfiles]);
+  const dmAutoRouteAgentPubkeys = React.useMemo(
+    () =>
+      getDmAutoRouteAgentPubkeys({
+        channel: activeChannel,
+        currentPubkey,
+        knownAgentPubkeys: routingAgentPubkeys,
+      }),
+    [activeChannel, currentPubkey, routingAgentPubkeys],
+  );
   const personasQuery = usePersonasQuery();
   const { personaLookup, respondToLookup } = React.useMemo(() => {
     const agents = managedAgentsQuery.data ?? [];
