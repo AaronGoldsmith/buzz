@@ -51,6 +51,7 @@ type MessageThreadPanelProps = {
   channelName: string;
   currentPubkey?: string;
   disabled?: boolean;
+  enableAgentConversationLinks?: boolean;
   firstUnreadReplyId?: string | null;
   layout?: "standalone" | "split";
   editTarget?: {
@@ -408,6 +409,7 @@ export function MessageThreadPanel({
   channelName,
   currentPubkey,
   disabled = false,
+  enableAgentConversationLinks = false,
   firstUnreadReplyId,
   layout = "standalone",
   editTarget,
@@ -731,6 +733,7 @@ export function MessageThreadPanel({
             containerClassName={THREAD_PANEL_COMPOSER_GUTTER_CLASS}
             disabled={disabled || isSending || !channelId}
             draftKey={`thread:${threadHead.id}`}
+            enableAgentConversationLinks={enableAgentConversationLinks}
             editTarget={editTarget}
             isSending={isSending}
             onCancelEdit={onCancelEdit}

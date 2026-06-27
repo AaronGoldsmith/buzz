@@ -45,6 +45,7 @@ import { UserProfilePopover } from "@/features/profile/ui/UserProfilePopover";
 import { invokeTauri } from "@/shared/api/tauri";
 import type { Channel } from "@/shared/api/types";
 import { useChannelNavigation } from "@/shared/context/ChannelNavigationContext";
+import { CHANNEL_TASKS_FEATURE_ID, useFeatureEnabled } from "@/shared/features";
 import { copyCodeBlockToClipboard } from "@/shared/lib/codeBlockClipboard";
 import { cn } from "@/shared/lib/cn";
 import { rewriteRelayUrl } from "@/shared/lib/mediaUrl";
@@ -284,10 +285,18 @@ function MarkdownVideoPlayer({
  * overrides can see them, which would break copy → paste → click end-to-end.
  * Everything else delegates to `defaultUrlTransform`.
  */
-function messageLinkUrlTransform(value: string, key: string): string {
+function messageLinkUrlTransform(
+  value: string,
+  key: string,
+  agentConversationLinksEnabled: boolean,
+): string {
+  if (key === "href" && isMessageLink(value)) {
+    return value;
+  }
   if (
     key === "href" &&
-    (isMessageLink(value) || isAgentConversationLink(value))
+    agentConversationLinksEnabled &&
+    isAgentConversationLink(value)
   ) {
     return value;
   }
@@ -1893,6 +1902,7 @@ function SpoilerInline({
 function createMarkdownComponents(
   runtimeRef: React.RefObject<MarkdownRuntime>,
   interactive = true,
+  agentConversationLinksEnabled = true,
 ): Components {
   const paragraphClassName = "leading-[inherit]";
   const listItemClassName = "my-1 [&_p]:inline";
@@ -1984,40 +1994,42 @@ function createMarkdownComponents(
             </a>
           );
         }
-        const agentConversationLinkTarget =
-          resolveAgentConversationLinkRenderTarget({
-            href,
-            label: getReactNodeText(children),
-          });
-        if (agentConversationLinkTarget.kind !== "none") {
-          if (agentConversationLinkTarget.kind === "card") {
+        if (agentConversationLinksEnabled) {
+          const agentConversationLinkTarget =
+            resolveAgentConversationLinkRenderTarget({
+              href,
+              label: getReactNodeText(children),
+            });
+          if (agentConversationLinkTarget.kind !== "none") {
+            if (agentConversationLinkTarget.kind === "card") {
+              return (
+                <AgentConversationLinkCard
+                  href={href}
+                  interactive={interactive}
+                  link={agentConversationLinkTarget.link}
+                  marker={findAgentConversationMarker(
+                    agentConversationMarkers,
+                    agentConversationLinkTarget.link,
+                  )}
+                  onOpenAgentConversationLink={onOpenAgentConversationLink}
+                />
+              );
+            }
+
             return (
-              <AgentConversationLinkCard
+              <a
+                {...props}
+                className="font-medium text-primary underline underline-offset-4 transition-colors hover:text-primary/80 cursor-pointer"
                 href={href}
-                interactive={interactive}
-                link={agentConversationLinkTarget.link}
-                marker={findAgentConversationMarker(
-                  agentConversationMarkers,
-                  agentConversationLinkTarget.link,
-                )}
-                onOpenAgentConversationLink={onOpenAgentConversationLink}
-              />
+                onClick={(event) => {
+                  event.preventDefault();
+                  onOpenAgentConversationLink(agentConversationLinkTarget.link);
+                }}
+              >
+                {children}
+              </a>
             );
           }
-
-          return (
-            <a
-              {...props}
-              className="font-medium text-primary underline underline-offset-4 transition-colors hover:text-primary/80 cursor-pointer"
-              href={href}
-              onClick={(event) => {
-                event.preventDefault();
-                onOpenAgentConversationLink(agentConversationLinkTarget.link);
-              }}
-            >
-              {children}
-            </a>
-          );
         }
         // Malformed message deep link — fall through to the default
         // anchor (renders as a normal external link).
@@ -2326,6 +2338,9 @@ function createMarkdownComponents(
       const { agentConversationMarkers, onOpenAgentConversationLink } =
         runtimeRef.current;
       const href = getReactNodeText(children);
+      if (!agentConversationLinksEnabled) {
+        return <span data-agent-conversation-link="">{href}</span>;
+      }
       const parsed = parseAgentConversationLink(href);
       if (!parsed.ok) {
         return <span data-agent-conversation-link="">{href}</span>;
@@ -2361,6 +2376,9 @@ function MarkdownInner({
   searchQuery,
   videoReviewContext,
 }: MarkdownProps) {
+  const agentConversationLinksEnabled = useFeatureEnabled(
+    CHANNEL_TASKS_FEATURE_ID,
+  );
   const { channels: rawChannels } = useChannelNavigation();
   const channels = useStableArray(rawChannels);
   const { goChannel } = useAppNavigation();
@@ -2406,24 +2424,34 @@ function MarkdownInner({
   });
 
   const components = React.useMemo(
-    () => createMarkdownComponents(runtimeRef, interactive),
-    [runtimeRef, interactive],
+    () =>
+      createMarkdownComponents(
+        runtimeRef,
+        interactive,
+        agentConversationLinksEnabled,
+      ),
+    [runtimeRef, interactive, agentConversationLinksEnabled],
   );
 
   // biome-ignore lint/suspicious/noExplicitAny: PluggableList type not directly importable
-  const remarkPlugins = React.useMemo<any[]>(
-    () => [
+  const remarkPlugins = React.useMemo<any[]>(() => {
+    // biome-ignore lint/suspicious/noExplicitAny: PluggableList type not directly importable
+    const plugins: any[] = [
       remarkGfm,
       remarkBreaks,
       remarkSpoilers,
       remarkMessageLinks,
-      remarkAgentConversationLinks,
+    ];
+    if (agentConversationLinksEnabled) {
+      plugins.push(remarkAgentConversationLinks);
+    }
+    plugins.push(
       [remarkMentions, { mentionNames }],
       [remarkChannelLinks, { channelNames }],
       [remarkCustomEmoji, { customEmoji }],
-    ],
-    [mentionNames, channelNames, customEmoji],
-  );
+    );
+    return plugins;
+  }, [agentConversationLinksEnabled, mentionNames, channelNames, customEmoji]);
 
   // biome-ignore lint/suspicious/noExplicitAny: PluggableList type not directly importable
   const rehypePlugins = React.useMemo<any[]>(() => {
@@ -2450,7 +2478,9 @@ function MarkdownInner({
       components={components}
       remarkPlugins={remarkPlugins}
       rehypePlugins={rehypePlugins}
-      urlTransform={messageLinkUrlTransform}
+      urlTransform={(value, key) =>
+        messageLinkUrlTransform(value, key, agentConversationLinksEnabled)
+      }
     >
       {processedContent}
     </ReactMarkdown>

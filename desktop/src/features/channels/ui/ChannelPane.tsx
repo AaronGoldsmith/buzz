@@ -1,13 +1,5 @@
 import * as React from "react";
-import {
-  Bot,
-  ClipboardPlus,
-  Hash,
-  LogIn,
-  Plus,
-  Sparkles,
-  UserPlus,
-} from "lucide-react";
+import { Bot, Hash, LogIn, Plus, Sparkles, UserPlus } from "lucide-react";
 import { useMediaUpload } from "@/features/messages/lib/useMediaUpload";
 import { MessageComposer } from "@/features/messages/ui/MessageComposer";
 import { DropZoneOverlay } from "@/features/messages/ui/ComposerAttachments";
@@ -63,6 +55,7 @@ import {
   mentionsKnownAgent,
 } from "@/features/channels/ui/ChannelPane.helpers";
 import * as agentSessionSelection from "@/features/channels/ui/agentSessionSelection";
+import { ChannelTasksView } from "@/features/channels/ui/ChannelTasksView";
 import type { ChannelAgentSessionAgent } from "@/features/channels/ui/useChannelAgentSessions";
 import { Button } from "@/shared/ui/button";
 import type { useChannelFind } from "@/features/search/useChannelFind";
@@ -70,16 +63,9 @@ import {
   buildMainTimelineEntries,
   type MainTimelineEntry,
 } from "@/features/messages/lib/threadPanel";
-import {
-  formatDayHeading,
-  formatTime,
-} from "@/features/messages/lib/dateFormatters";
 import { useRenderScopedReactionHydration } from "@/features/messages/lib/useRenderScopedReactionHydration";
 import type { TimelineMessage } from "@/features/messages/types";
-import {
-  resolveUserLabel,
-  type UserProfileLookup,
-} from "@/features/profile/lib/identity";
+import type { UserProfileLookup } from "@/features/profile/lib/identity";
 import { isWelcomeChannel } from "@/features/onboarding/welcome";
 import { KIND_SYSTEM_MESSAGE } from "@/shared/constants/kinds";
 import type { Channel } from "@/shared/api/types";
@@ -104,6 +90,7 @@ type ChannelPaneProps = {
     id: string;
     imetaMedia?: ImetaMedia[];
   } | null;
+  enableAgentConversations?: boolean;
   fetchOlder?: () => Promise<void>;
   header?: React.ReactNode;
   hasOlderMessages?: boolean;
@@ -205,218 +192,6 @@ type ChannelPaneProps = {
   isMessageUnreadById?: (messageId: string) => boolean;
 };
 
-type ChannelTaskItem = {
-  marker: AgentConversationMarker;
-  message: TimelineMessage | null;
-  threadMessage: TimelineMessage | null;
-};
-
-function formatTaskStartedAt(unixSeconds: number): string {
-  return `${formatDayHeading(unixSeconds)} at ${formatTime(unixSeconds)}`;
-}
-
-function ChannelTaskRow({
-  currentPubkey,
-  marker,
-  message,
-  onOpenAgentConversation,
-  onGoToTaskMessage,
-  profiles,
-  threadMessage,
-}: {
-  currentPubkey?: string;
-  marker: AgentConversationMarker;
-  message: TimelineMessage | null;
-  onOpenAgentConversation?: (
-    message: TimelineMessage,
-    options?: { publishMarker?: boolean },
-  ) => void;
-  onGoToTaskMessage?: (
-    marker: AgentConversationMarker,
-    message: TimelineMessage,
-    threadMessage: TimelineMessage,
-  ) => void;
-  profiles?: UserProfileLookup;
-  threadMessage: TimelineMessage | null;
-}) {
-  const startedAt = marker.startedAt || marker.createdAt;
-  const starterName = resolveUserLabel({
-    currentPubkey,
-    profiles,
-    pubkey: marker.starterPubkey,
-  });
-
-  return (
-    <article
-      className="group/task mx-1 min-w-0 overflow-hidden rounded-lg border border-border/70 bg-muted/35 transition-colors hover:bg-muted/45 focus-within:bg-muted/45"
-      data-agent-conversation-id={marker.eventId}
-      data-testid="channel-task-row"
-    >
-      <div className="flex min-w-0 items-center gap-3 px-3 py-2">
-        <div
-          aria-hidden
-          className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-background p-2.5 text-muted-foreground shadow-xs ring-1 ring-border/60"
-        >
-          <ClipboardPlus className="size-5" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <p
-            className="truncate text-sm font-medium text-foreground"
-            title={marker.title}
-          >
-            {marker.title}
-          </p>
-          <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {starterName} · {formatTaskStartedAt(startedAt)}
-          </p>
-        </div>
-        <div className="flex shrink-0 items-center gap-2 opacity-0 transition-opacity group-hover/task:opacity-100 group-focus-within/task:opacity-100">
-          <Button
-            className="h-8 rounded-lg bg-transparent px-3 text-xs font-medium text-foreground shadow-none hover:bg-secondary hover:text-secondary-foreground"
-            data-testid="channel-task-go-to-thread"
-            disabled={!onGoToTaskMessage || !message || !threadMessage}
-            onClick={() => {
-              if (message && threadMessage) {
-                onGoToTaskMessage?.(marker, message, threadMessage);
-              }
-            }}
-            title="Go to source message in channel"
-            type="button"
-            variant="ghost"
-          >
-            Go to message
-          </Button>
-          <Button
-            className="h-8 rounded-lg px-3 text-xs font-medium"
-            data-testid="channel-task-open"
-            disabled={!onOpenAgentConversation || !message}
-            onClick={() => {
-              if (message) {
-                onOpenAgentConversation?.(message, { publishMarker: false });
-              }
-            }}
-            type="button"
-            variant="outline"
-          >
-            Open
-          </Button>
-        </div>
-      </div>
-    </article>
-  );
-}
-
-function ChannelTasksView({
-  activeChannel,
-  agentConversationMarkers,
-  currentPubkey,
-  messages,
-  onOpenAgentConversation,
-  onGoToTaskMessage,
-  profiles,
-  scrollContainerRef,
-}: {
-  activeChannel: Channel | null;
-  agentConversationMarkers?: readonly AgentConversationMarker[];
-  currentPubkey?: string;
-  messages: readonly TimelineMessage[];
-  onOpenAgentConversation?: (
-    message: TimelineMessage,
-    options?: { publishMarker?: boolean },
-  ) => void;
-  onGoToTaskMessage?: (
-    marker: AgentConversationMarker,
-    message: TimelineMessage,
-    threadMessage: TimelineMessage,
-  ) => void;
-  profiles?: UserProfileLookup;
-  scrollContainerRef: React.RefObject<HTMLDivElement | null>;
-}) {
-  const messageById = React.useMemo(
-    () => new Map(messages.map((message) => [message.id, message])),
-    [messages],
-  );
-  const taskItems = React.useMemo<ChannelTaskItem[]>(() => {
-    const channelId = activeChannel?.id ?? null;
-
-    return (agentConversationMarkers ?? [])
-      .filter((marker) => !channelId || marker.channelId === channelId)
-      .map((marker) => {
-        const message = messageById.get(marker.agentReplyId) ?? null;
-        const resolvedThreadMessage =
-          messageById.get(marker.threadRootMessageId ?? "") ??
-          messageById.get(marker.threadRootId) ??
-          messageById.get(marker.parentMessageId ?? "") ??
-          null;
-        const threadMessage =
-          resolvedThreadMessage ??
-          (marker.threadRootId === marker.agentReplyId ? message : null);
-        return {
-          marker,
-          message,
-          threadMessage,
-        };
-      })
-      .sort(
-        (left, right) =>
-          (right.marker.startedAt || right.marker.createdAt) -
-            (left.marker.startedAt || left.marker.createdAt) ||
-          right.marker.eventId.localeCompare(left.marker.eventId),
-      );
-  }, [activeChannel?.id, agentConversationMarkers, messageById]);
-
-  return (
-    <div
-      className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
-      data-testid="channel-tasks-view"
-    >
-      <div
-        className="absolute inset-0 overflow-y-auto overflow-x-hidden overscroll-none px-2 pb-8 pt-1 [overflow-anchor:none]"
-        ref={scrollContainerRef}
-      >
-        <div
-          className={cn(
-            "mx-auto flex w-full max-w-4xl flex-col gap-6 px-3",
-            channelChrome.contentPadding,
-          )}
-        >
-          {taskItems.length === 0 ? (
-            <div
-              className="mt-10 rounded-3xl border border-dashed border-border/80 bg-card/70 px-6 py-10 text-center shadow-xs"
-              data-testid="channel-tasks-empty"
-            >
-              <div className="mx-auto flex size-12 items-center justify-center rounded-2xl border border-border/70 bg-muted/40 text-muted-foreground">
-                <ClipboardPlus className="size-5" />
-              </div>
-              <p className="mt-4 text-base font-semibold tracking-tight">
-                No tasks yet
-              </p>
-              <p className="mx-auto mt-2 max-w-sm text-sm leading-5 text-muted-foreground">
-                New tasks will appear here when an agent conversation is opened
-                from this channel.
-              </p>
-            </div>
-          ) : (
-            <div className="mt-3 flex min-w-0 flex-col gap-2">
-              {taskItems.map(({ marker, message, threadMessage }) => (
-                <ChannelTaskRow
-                  currentPubkey={currentPubkey}
-                  key={marker.eventId}
-                  marker={marker}
-                  message={message}
-                  onOpenAgentConversation={onOpenAgentConversation}
-                  onGoToTaskMessage={onGoToTaskMessage}
-                  profiles={profiles}
-                  threadMessage={threadMessage}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 export const ChannelPane = React.memo(function ChannelPane({
   activeChannel,
   agentConversationMarkers,
@@ -428,6 +203,7 @@ export const ChannelPane = React.memo(function ChannelPane({
   channelManagementOpen = false,
   currentPubkey,
   editTarget = null,
+  enableAgentConversations = true,
   fetchOlder,
   header,
   hasOlderMessages,
@@ -521,9 +297,12 @@ export const ChannelPane = React.memo(function ChannelPane({
     !activeChannel.isMember &&
     activeChannel.visibility === "open" &&
     !activeChannel.archivedAt;
-  const isTasksSurface = surfaceTab === "tasks";
+  const isTasksSurface = enableAgentConversations && surfaceTab === "tasks";
   const hasMainComposerOverlay = !isNonMemberView && !isTasksSurface;
   const activeChannelId = activeChannel?.id ?? null;
+  const activeAgentConversationMarkers = enableAgentConversations
+    ? agentConversationMarkers
+    : undefined;
   const isActiveWelcomeChannel =
     activeChannel !== null && isWelcomeChannel(activeChannel);
   React.useEffect(() => {
@@ -688,7 +467,7 @@ export const ChannelPane = React.memo(function ChannelPane({
   );
   const handleOpenAgentConversation = React.useCallback(
     (message: TimelineMessage, options?: { publishMarker?: boolean }) => {
-      if (!activeChannel || !message.pubkey) {
+      if (!enableAgentConversations || !activeChannel || !message.pubkey) {
         return;
       }
 
@@ -719,7 +498,7 @@ export const ChannelPane = React.memo(function ChannelPane({
         options,
       );
     },
-    [activeChannel, messages, openAgentConversation],
+    [activeChannel, enableAgentConversations, messages, openAgentConversation],
   );
   const handleGoToTaskMessage = React.useCallback(
     (
@@ -808,7 +587,8 @@ export const ChannelPane = React.memo(function ChannelPane({
   const threadActivityAgents = React.useMemo(() => {
     if (
       threadComposerBotTypingPubkeys.length === 0 ||
-      (openThreadHeadId &&
+      (enableAgentConversations &&
+        openThreadHeadId &&
         agentConversationMarkers?.some(
           (marker) => marker.threadRootId === openThreadHeadId,
         ))
@@ -825,6 +605,7 @@ export const ChannelPane = React.memo(function ChannelPane({
   }, [
     activityAgents,
     agentConversationMarkers,
+    enableAgentConversations,
     openThreadHeadId,
     threadComposerBotTypingPubkeys,
   ]);
@@ -939,6 +720,10 @@ export const ChannelPane = React.memo(function ChannelPane({
     [onSendThreadReply, threadAutoRouteAgentPubkeys],
   );
   const hiddenAgentConversationMessageIds = React.useMemo(() => {
+    if (!enableAgentConversations) {
+      return new Set<string>();
+    }
+
     const hiddenIds = getHiddenAgentConversationMessageIds(
       baseVisibleMessages,
       agentConversationMarkers,
@@ -951,7 +736,12 @@ export const ChannelPane = React.memo(function ChannelPane({
       hiddenIds.add(id);
     }
     return hiddenIds;
-  }, [agentConversationMarkers, baseVisibleMessages, threadSourceMessages]);
+  }, [
+    agentConversationMarkers,
+    baseVisibleMessages,
+    enableAgentConversations,
+    threadSourceMessages,
+  ]);
   const visibleMessages = React.useMemo(() => {
     if (hiddenAgentConversationMessageIds.size === 0) {
       return baseVisibleMessages;
@@ -1092,7 +882,7 @@ export const ChannelPane = React.memo(function ChannelPane({
           {isTasksSurface ? (
             <ChannelTasksView
               activeChannel={activeChannel}
-              agentConversationMarkers={agentConversationMarkers}
+              agentConversationMarkers={activeAgentConversationMarkers}
               currentPubkey={currentPubkey}
               messages={messages}
               onOpenAgentConversation={handleOpenAgentConversation}
@@ -1104,7 +894,7 @@ export const ChannelPane = React.memo(function ChannelPane({
             <>
               <MessageTimeline
                 ref={messageTimelineRef}
-                agentConversationMarkers={agentConversationMarkers}
+                agentConversationMarkers={activeAgentConversationMarkers}
                 agentPubkeys={agentPubkeys}
                 channelId={activeChannel?.id}
                 channelIntro={channelIntro}
@@ -1147,7 +937,11 @@ export const ChannelPane = React.memo(function ChannelPane({
                 onEdit={onEdit}
                 onMarkUnread={onMarkUnread}
                 onMarkRead={onMarkRead}
-                onOpenAgentConversation={handleOpenAgentConversation}
+                onOpenAgentConversation={
+                  enableAgentConversations
+                    ? handleOpenAgentConversation
+                    : undefined
+                }
                 onReply={activeChannel?.archivedAt ? undefined : onOpenThread}
                 channelName={activeChannel?.name}
                 channelType={activeChannel?.channelType ?? null}
@@ -1210,6 +1004,7 @@ export const ChannelPane = React.memo(function ChannelPane({
                       channelType={activeChannel?.channelType ?? null}
                       containerClassName="px-5"
                       disabled={isComposerDisabled}
+                      enableAgentConversationLinks={enableAgentConversations}
                       editTarget={mainEditTarget}
                       isSending={isSending}
                       mediaController={mainComposerMedia}
@@ -1286,13 +1081,14 @@ export const ChannelPane = React.memo(function ChannelPane({
         (() => {
           const panel = (
             <MessageThreadPanel
-              agentConversationMarkers={agentConversationMarkers}
+              agentConversationMarkers={activeAgentConversationMarkers}
               agentPubkeys={agentPubkeys}
               channel={activeChannel}
               channelId={activeChannel?.id ?? null}
               channelName={activeChannel?.name ?? "channel"}
               currentPubkey={currentPubkey}
               disabled={isComposerDisabled}
+              enableAgentConversationLinks={enableAgentConversations}
               editTarget={threadEditTarget}
               firstUnreadReplyId={threadFirstUnreadReplyId}
               isFollowingThread={isFollowingThread}
@@ -1313,7 +1109,11 @@ export const ChannelPane = React.memo(function ChannelPane({
               onMarkUnread={onMarkUnread}
               onMarkRead={onMarkRead}
               onExpandReplies={onExpandThreadReplies}
-              onOpenAgentConversation={handleOpenAgentConversation}
+              onOpenAgentConversation={
+                enableAgentConversations
+                  ? handleOpenAgentConversation
+                  : undefined
+              }
               onSelectReplyTarget={onSelectThreadReplyTarget}
               onSend={handleSendThreadReply}
               onScrollTargetResolved={onThreadScrollTargetResolved}

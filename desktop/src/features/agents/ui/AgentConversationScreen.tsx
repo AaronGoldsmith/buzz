@@ -807,6 +807,7 @@ export function AgentConversationScreen({
             containerClassName="px-5"
             disabled={isComposerDisabled}
             draftKey={`agent-conversation:${conversation.id}`}
+            enableAgentConversationLinks
             isSending={sendMessageMutation.isPending}
             mediaController={media}
             onSend={handleSend}
