@@ -34,6 +34,25 @@ type UseAgentConversationRouteTargetInput = {
   timelineMessages: readonly TimelineMessage[];
 };
 
+function getSingleDmAgentPubkey(
+  channel: Channel,
+  agentPubkeys: ReadonlySet<string>,
+) {
+  if (channel.channelType !== "dm") {
+    return "";
+  }
+
+  const dmAgentPubkeys = new Map<string, string>();
+  for (const pubkey of channel.participantPubkeys) {
+    const normalized = normalizePubkey(pubkey);
+    if (agentPubkeys.has(normalized)) {
+      dmAgentPubkeys.set(normalized, pubkey);
+    }
+  }
+
+  return dmAgentPubkeys.size === 1 ? [...dmAgentPubkeys.values()][0] : "";
+}
+
 export function useAgentConversationRouteTarget({
   activeChannel,
   agentConversationMarkers,
@@ -85,10 +104,12 @@ export function useAgentConversationRouteTarget({
       collectMessageMentionPubkeys([sourceMessage]).find((pubkey) =>
         agentPubkeys.has(normalizePubkey(pubkey)),
       ) ?? "";
+    const dmAgentPubkey = getSingleDmAgentPubkey(activeChannel, agentPubkeys);
     const taskAgentPubkey =
       marker?.agentPubkey ||
       (sourceAuthorIsAgent ? (sourceMessage.pubkey ?? "") : "") ||
-      mentionedAgentPubkey;
+      mentionedAgentPubkey ||
+      dmAgentPubkey;
     const taskAgentName =
       marker?.agentName ||
       (sourceAuthorIsAgent && taskAgentPubkey ? sourceMessage.author : "") ||
