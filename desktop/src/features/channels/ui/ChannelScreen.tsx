@@ -907,7 +907,7 @@ export function ChannelScreen({
                   activeChannel={activeChannel}
                   activityAgents={channelAgentSessionAgents}
                   agentConversationMarkers={agentConversationMarkers}
-                  agentPubkeys={agentPubkeys}
+                  agentPubkeys={routingAgentPubkeys}
                   agentSessionAgents={agentSessionAgents}
                   botTypingEntries={botTypingEntries}
                   channelFind={channelFind}
