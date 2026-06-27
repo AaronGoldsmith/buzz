@@ -12,6 +12,10 @@ import {
   MSG_PREFIX,
   THREAD_PREFIX,
 } from "@/features/channels/readState/readStateFormat";
+import {
+  getDmAutoRouteAgentPubkeys,
+  mergeAutoRouteMentionPubkeys,
+} from "@/features/channels/ui/ChannelPane.helpers";
 import { ChannelScreenEmptyState } from "@/features/channels/ui/ChannelScreenEmptyState";
 import {
   ChannelScreenHeader,
@@ -327,6 +331,15 @@ export function ChannelScreen({
     }
     return pubkeys;
   }, [channelMembers, managedAgents, relayAgents]);
+  const dmAutoRouteAgentPubkeys = React.useMemo(
+    () =>
+      getDmAutoRouteAgentPubkeys({
+        channel: activeChannel,
+        currentPubkey,
+        knownAgentPubkeys: agentPubkeys,
+      }),
+    [activeChannel, agentPubkeys, currentPubkey],
+  );
   const {
     agentSessionCandidates,
     botTypingEntries,
@@ -490,6 +503,23 @@ export function ChannelScreen({
     threadReplyTargetId,
     toggleReactionMutation,
   });
+  const handleSendMessageWithDmAutoRoute = React.useCallback(
+    async (
+      content: string,
+      mentionPubkeys: string[],
+      mediaTags?: string[][],
+    ) => {
+      await handleSendMessage(
+        content,
+        mergeAutoRouteMentionPubkeys({
+          autoRouteAgentPubkeys: dmAutoRouteAgentPubkeys,
+          mentionPubkeys,
+        }),
+        mediaTags,
+      );
+    },
+    [dmAutoRouteAgentPubkeys, handleSendMessage],
+  );
   const effectiveToggleReaction = React.useMemo(
     () =>
       activeChannel && !activeChannel.archivedAt && activeChannel.isMember
@@ -943,7 +973,7 @@ export function ChannelScreen({
                   onCloseProfilePanel={handleCloseProfilePanel}
                   onOpenThread={handleOpenThreadAndCloseAgentSession}
                   onSelectThreadReplyTarget={handleSelectThreadReplyTarget}
-                  onSendMessage={handleSendMessage}
+                  onSendMessage={handleSendMessageWithDmAutoRoute}
                   onSendVideoReviewComment={effectiveSendVideoReviewComment}
                   onSendThreadReply={handleSendThreadReply}
                   onThreadScrollTargetChange={setThreadScrollTargetId}
