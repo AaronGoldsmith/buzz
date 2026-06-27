@@ -324,6 +324,10 @@ export function ChannelScreen({
   const managedAgents = managedAgentsQuery.data ?? [];
   const relayAgentsQuery = useRelayAgentsQuery();
   const relayAgents = relayAgentsQuery.data ?? [];
+  const agentLookupReady =
+    !channelMembersQuery.isLoading &&
+    !managedAgentsQuery.isLoading &&
+    !relayAgentsQuery.isLoading;
   const agentPubkeys = React.useMemo(() => {
     const pubkeys = new Set<string>();
     for (const member of channelMembers ?? []) {
@@ -699,6 +703,7 @@ export function ChannelScreen({
   useAgentConversationRouteTarget({
     activeChannel,
     agentConversationMarkers,
+    agentLookupReady,
     agentPubkeys,
     enabled: isChannelTasksEnabled,
     goChannel,

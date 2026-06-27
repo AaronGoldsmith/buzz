@@ -21,7 +21,7 @@ type ComposerPasteHandlerOptions = {
 
 export function createMessageComposerPasteHandler({
   agentConversationTitleForHref,
-  enableAgentConversationLinks = true,
+  enableAgentConversationLinks = false,
   editor,
   scrollComposerToBottom,
   uploadFile,

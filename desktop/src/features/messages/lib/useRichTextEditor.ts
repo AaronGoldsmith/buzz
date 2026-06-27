@@ -117,7 +117,7 @@ export function useRichTextEditor({
   channelNames,
   customEmoji,
   agentConversationTitleForHref,
-  enableAgentConversationLinks = true,
+  enableAgentConversationLinks = false,
   onSubmit,
   onEditLastOwnMessage,
   isAutocompleteOpen,
