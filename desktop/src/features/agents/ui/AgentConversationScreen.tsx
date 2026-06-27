@@ -251,11 +251,10 @@ export function AgentConversationScreen({
       conversationSourceMessages,
       knownAgentParticipants,
     );
+    const primaryAgentKey = normalizePubkey(conversation.agentPubkey);
     if (
-      !pubkeys.some(
-        (pubkey) =>
-          normalizePubkey(pubkey) === normalizePubkey(conversation.agentPubkey),
-      )
+      primaryAgentKey &&
+      !pubkeys.some((pubkey) => normalizePubkey(pubkey) === primaryAgentKey)
     ) {
       pubkeys.unshift(conversation.agentPubkey);
     }
@@ -456,6 +455,9 @@ export function AgentConversationScreen({
     [restrictedAgentNames],
   );
   const composerPlaceholder = React.useMemo(() => {
+    if (agentParticipants.length === 0) {
+      return "Message task";
+    }
     if (!canMessageAnyAgent) {
       return "Reply to conversation";
     }
@@ -466,9 +468,11 @@ export function AgentConversationScreen({
     return "Message conversation";
   }, [agentParticipants, canMessageAnyAgent]);
   const emptyDescription =
-    agentParticipants.length === 1
-      ? "Send a message below to keep working with this agent on the topic."
-      : "Send a message below to keep working with these agents on the topic.";
+    agentParticipants.length === 0
+      ? "Send a message below to start working on this task."
+      : agentParticipants.length === 1
+        ? "Send a message below to keep working with this agent on the topic."
+        : "Send a message below to keep working with these agents on the topic.";
   const [isPublishingThreadSummary, setIsPublishingThreadSummary] =
     React.useState(false);
   const lastPublishedThreadRecapRef = React.useRef<string | null>(null);

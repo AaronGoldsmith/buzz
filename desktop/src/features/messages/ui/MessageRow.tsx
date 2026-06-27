@@ -256,10 +256,6 @@ export const MessageRow = React.memo(
       message.tags,
     );
     const bodyOffsetClass = emojiOnly ? "mt-1" : "-mt-0.5";
-    const isAgentMessage =
-      message.pubkey != null &&
-      !message.pending &&
-      resolvedAgentPubkeys.has(normalizePubkey(message.pubkey));
     const { channels } = useChannelNavigation();
     const channelNames = React.useMemo(
       () => channels.filter((c) => c.channelType !== "dm").map((c) => c.name),
@@ -431,7 +427,7 @@ export const MessageRow = React.memo(
           isUnread={isUnread}
           message={message}
           onContinueConversation={
-            isAgentMessage ? onOpenAgentConversation : undefined
+            message.pending ? undefined : onOpenAgentConversation
           }
           onDelete={onDelete}
           onEdit={onEdit}

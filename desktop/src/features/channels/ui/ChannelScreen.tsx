@@ -80,6 +80,7 @@ import {
 import { useChannelAgentSessions } from "./useChannelAgentSessions";
 import { useChannelPanelHistoryState } from "./useChannelPanelHistoryState";
 import { useChannelProfilePanel } from "./useChannelProfilePanel";
+import { useAgentConversationRouteTarget } from "./useAgentConversationRouteTarget";
 import { useChannelRouteTarget } from "./useChannelRouteTarget";
 import { useChannelUnreadState } from "./useChannelUnreadState";
 import { useResetChannelSurfaceTabOnRouteOpen } from "./useResetChannelSurfaceTabOnRouteOpen";
@@ -695,72 +696,16 @@ export function ChannelScreen({
       setProfilePanelPubkey,
     ],
   );
-  const handledAgentConversationRouteTargetRef = React.useRef<string | null>(
-    null,
-  );
-  React.useEffect(() => {
-    if (!isChannelTasksEnabled || !targetAgentConversationReplyId) {
-      handledAgentConversationRouteTargetRef.current = null;
-      return;
-    }
-
-    const targetKey = `${activeChannelId ?? "none"}:${targetAgentConversationReplyId}`;
-    if (handledAgentConversationRouteTargetRef.current === targetKey) {
-      return;
-    }
-    if (!activeChannel || activeChannel.channelType === "forum") {
-      return;
-    }
-
-    const agentReply =
-      timelineMessages.find(
-        (message) => message.id === targetAgentConversationReplyId,
-      ) ?? null;
-    const agentReplyPubkey = agentReply?.pubkey;
-    if (!agentReply || !agentReplyPubkey) {
-      return;
-    }
-
-    const rootId = agentReply.rootId ?? agentReply.parentId ?? agentReply.id;
-    const contextMessages = timelineMessages.filter(
-      (candidate) =>
-        candidate.id === rootId ||
-        candidate.id === agentReply.id ||
-        candidate.rootId === rootId ||
-        candidate.parentId === rootId,
-    );
-    const parentMessage = agentReply.parentId
-      ? (timelineMessages.find(
-          (candidate) => candidate.id === agentReply.parentId,
-        ) ?? null)
-      : null;
-    const threadRootMessage =
-      timelineMessages.find((candidate) => candidate.id === rootId) ?? null;
-
-    handledAgentConversationRouteTargetRef.current = targetKey;
-    void goChannel(activeChannel.id, { replace: true }).then(() => {
-      openAgentConversation(
-        {
-          agentName: agentReply.author,
-          agentPubkey: agentReplyPubkey,
-          agentReply,
-          channel: activeChannel,
-          contextMessages,
-          parentMessage,
-          threadRootMessage,
-        },
-        { publishMarker: false },
-      );
-    });
-  }, [
+  useAgentConversationRouteTarget({
     activeChannel,
-    activeChannelId,
+    agentConversationMarkers,
+    agentPubkeys,
+    enabled: isChannelTasksEnabled,
     goChannel,
-    isChannelTasksEnabled,
     openAgentConversation,
     targetAgentConversationReplyId,
     timelineMessages,
-  ]);
+  });
   const mainTimelineTargetMessageId = useChannelRouteTarget({
     activeChannel,
     activeChannelId,
