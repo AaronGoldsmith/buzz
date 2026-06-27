@@ -186,6 +186,7 @@ test("continued conversations persist across app restarts", () => {
 
 test("message-anchored tasks persist without a primary agent", () => {
   withMockLocalStorage(() => {
+    const workspaceScope = "wss://relay.example.com";
     const root = message({
       body: "Can someone turn this into a task?",
       createdAt: 1,
@@ -201,8 +202,8 @@ test("message-anchored tasks persist without a primary agent", () => {
       threadRootMessage: root,
     });
 
-    writePersistedAgentConversations("human", [conversation]);
-    const persisted = readPersistedAgentConversations("human");
+    writePersistedAgentConversations("human", workspaceScope, [conversation]);
+    const persisted = readPersistedAgentConversations("human", workspaceScope);
 
     assert.equal(persisted.length, 1);
     assert.equal(persisted[0].id, conversation.id);
