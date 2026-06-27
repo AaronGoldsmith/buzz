@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/ui/dialog";
+import { buildBatchImportPersonaInput } from "./batchImportPersonaInput";
 import { resolveManagedAgentAvatarUrl } from "./managedAgentAvatar";
 import { importedAvatarUrl } from "./personaDialogState";
 
@@ -97,11 +98,8 @@ export function BatchImportDialog({
           importedAvatarUrl(persona),
         );
         await createPersona({
-          displayName: persona.displayName,
-          avatarUrl: avatarUrl || undefined,
-          systemPrompt: persona.systemPrompt,
-          runtime: persona.runtime ?? undefined,
-          model: persona.model ?? undefined,
+          ...buildBatchImportPersonaInput(persona),
+          avatarUrl,
         });
         completed += 1;
         setImportedCount(completed);

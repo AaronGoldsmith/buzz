@@ -223,10 +223,7 @@ test("env vars editor renders in PersonaDialog new-persona form", async ({
 
   // Open the Agents view, click New > New agent to open the persona dialog.
   await page.getByTestId("open-agents-view").click();
-  await page
-    .getByTestId("agents-library-personas")
-    .getByRole("button", { name: "New", exact: true })
-    .click();
+  await page.getByTestId("new-agent-card").click();
   await page.getByRole("menuitem", { name: /^New agent$/ }).click();
 
   await expect(page.getByTestId("env-vars-editor")).toHaveCount(0);
